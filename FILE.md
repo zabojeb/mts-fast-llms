@@ -855,6 +855,221 @@ torch.save(quantized_model.state_dict(), 'qat_quantized_transformer.pth')
 
 ### Hugging Face Transformers
 
+Hugging Face Transformers — это библиотека, которая предоставляет готовые к использованию реализации популярных моделей трансформеров, таких как BERT, GPT, T5, и многих других. Рассмотрим основные аспекты работы с этой библиотекой.
+
+#### Установка и основные компоненты
+
+```bash
+pip install transformers
+```
+
+Основные компоненты библиотеки:
+- **Модели**: предобученные модели для различных задач
+- **Токенизаторы**: инструменты для преобразования текста в токены
+- **Конфигурации**: настройки моделей
+- **Пайплайны**: высокоуровневые интерфейсы для типовых задач
+
+#### Загрузка предобученных моделей
+
+```python
+from transformers import AutoModel, AutoTokenizer, AutoModelForSequenceClassification
+
+# Загрузка базовой модели
+model_name = "bert-base-uncased"
+model = AutoModel.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+# Загрузка модели для конкретной задачи
+classifier = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
+```
+
+#### Токенизация текста
+
+```python
+# Токенизация одного предложения
+text = "Hello, how are you?"
+tokens = tokenizer(text, return_tensors="pt")
+print(tokens)
+
+# Токенизация батча
+texts = ["Hello, how are you?", "I'm fine, thank you!"]
+batch_tokens = tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
+print(batch_tokens)
+
+# Декодирование токенов обратно в текст
+token_ids = batch_tokens["input_ids"][0]
+decoded_text = tokenizer.decode(token_ids)
+print(decoded_text)
+```
+
+#### Инференс с использованием предобученных моделей
+
+```python
+# Получение эмбеддингов
+with torch.no_grad():
+    outputs = model(**batch_tokens)
+    embeddings = outputs.last_hidden_state
+    # или
+    pooled_output = outputs.pooler_output
+
+# Классификация текста
+with torch.no_grad():
+    outputs = classifier(**batch_tokens)
+    logits = outputs.logits
+    predictions = torch.argmax(logits, dim=1)
+    print(predictions)
+```
+
+#### Дообучение моделей на собственных данных
+
+```python
+from transformers import Trainer, TrainingArguments
+from datasets import load_dataset
+
+# Загрузка данных
+dataset = load_dataset("glue", "sst2")
+
+# Функция для токенизации данных
+def tokenize_function(examples):
+    return tokenizer(examples["sentence"], padding="max_length", truncation=True)
+
+tokenized_datasets = dataset.map(tokenize_function, batched=True)
+
+# Настройка обучения
+training_args = TrainingArguments(
+    output_dir="./results",
+    num_train_epochs=3,
+    per_device_train_batch_size=16,
+    per_device_eval_batch_size=64,
+    warmup_steps=500,
+    weight_decay=0.01,
+    logging_dir="./logs",
+    logging_steps=10,
+    evaluation_strategy="epoch",
+    save_strategy="epoch",
+    load_best_model_at_end=True,
+)
+
+# Создание тренера
+trainer = Trainer(
+    model=classifier,
+    args=training_args,
+    train_dataset=tokenized_datasets["train"],
+    eval_dataset=tokenized_datasets["validation"],
+    tokenizer=tokenizer,
+)
+
+# Обучение модели
+trainer.train()
+
+# Сохранение модели
+model.save_pretrained("./fine-tuned-model")
+tokenizer.save_pretrained("./fine-tuned-model")
+```
+
+#### Использование пайплайнов для типовых задач
+
+```python
+from transformers import pipeline
+
+# Классификация текста
+classifier = pipeline("sentiment-analysis")
+result = classifier("I love this movie!")
+print(result)  # [{'label': 'POSITIVE', 'score': 0.9998}]
+
+# Генерация текста
+generator = pipeline("text-generation")
+result = generator("Once upon a time", max_length=50, num_return_sequences=2)
+print(result)
+
+# Заполнение маскированного текста
+unmasker = pipeline("fill-mask")
+result = unmasker("The man worked as a [MASK].")
+print(result)
+
+# Ответы на вопросы
+qa = pipeline("question-answering")
+context = "Hugging Face is a company based in New York and Paris."
+result = qa(question="Where is Hugging Face based?", context=context)
+print(result)  # {'answer': 'New York and Paris', 'start': 31, 'end': 49, 'score': 0.9975}
+```
+
+#### Оптимизация моделей Hugging Face
+
+```python
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+import torch
+
+# Загрузка модели
+model_name = "bert-base-uncased"
+model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+# Квантизация модели
+model.eval()
+quantized_model = torch.quantization.quantize_dynamic(
+    model, {torch.nn.Linear}, dtype=torch.qint8
+)
+
+# Экспорт модели в ONNX
+input_names = ["input_ids", "attention_mask", "token_type_ids"]
+output_names = ["logits"]
+
+dummy_input = tokenizer("This is a test", return_tensors="pt")
+
+torch.onnx.export(
+    model,
+    (dummy_input["input_ids"], dummy_input["attention_mask"], dummy_input["token_type_ids"]),
+    "model.onnx",
+    input_names=input_names,
+    output_names=output_names,
+    dynamic_axes={
+        "input_ids": {0: "batch_size", 1: "sequence_length"},
+        "attention_mask": {0: "batch_size", 1: "sequence_length"},
+        "token_type_ids": {0: "batch_size", 1: "sequence_length"},
+        "logits": {0: "batch_size"},
+    },
+    opset_version=12,
+)
+```
+
+#### Использование Hugging Face Accelerate для распределённого обучения
+
+```python
+from accelerate import Accelerator
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, AdamW
+from torch.utils.data import DataLoader
+
+# Инициализация акселератора
+accelerator = Accelerator()
+
+# Загрузка модели и данных
+model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+
+# Подготовка данных
+train_dataloader = DataLoader(...)
+eval_dataloader = DataLoader(...)
+
+# Оптимизатор
+optimizer = AdamW(model.parameters(), lr=5e-5)
+
+# Подготовка к распределённому обучению
+model, optimizer, train_dataloader, eval_dataloader = accelerator.prepare(
+    model, optimizer, train_dataloader, eval_dataloader
+)
+
+# Цикл обучения
+for epoch in range(3):
+    model.train()
+    for batch in train_dataloader:
+        outputs = model(**batch)
+        loss = outputs.loss
+        accelerator.backward(loss)
+        optimizer.step()
+        optimizer.zero_grad()
+```
+
 #### Квантизация с использованием bitsandbytes
 
 ```python
