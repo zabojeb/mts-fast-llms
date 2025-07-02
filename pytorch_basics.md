@@ -2,6 +2,21 @@
 
 ## Оглавление
 
+1. [Введение в PyTorch](#введение-в-pytorch)
+2. [Установка и настройка](#установка-и-настройка)
+3. [Тензоры: основные операции](#тензоры-основные-операции)
+4. [Автоматическое дифференцирование](#автоматическое-дифференцирование)
+5. [Создание нейронных сетей](#создание-нейронных-сетей)
+6. [Загрузка и обработка данных](#загрузка-и-обработка-данных)
+7. [Обучение моделей](#обучение-моделей)
+8. [Сохранение и загрузка моделей](#сохранение-и-загрузка-моделей)
+9. [Перенос на GPU](#перенос-на-gpu)
+10. [Оптимизация производительности](#оптимизация-производительности)
+11. [Квантование моделей](#квантование-моделей)
+12. [Экспорт моделей](#экспорт-моделей)
+13. [Архитектура трансформера](#архитектура-трансформера)
+14. [Работа с Hugging Face](#работа-с-hugging-face)
+15. [Практические задачи](#практические-задачи)
 
 ---
 
@@ -739,4 +754,823 @@ torch.onnx.export(
 
 ---
 
-Это базовое руководство по программированию на PyTorch, охватывающее основные концепции и операции. Для более глубокого изучения рекомендую обратиться к официальной документации PyTorch и учебным материалам.
+## Архитектура трансформера
+
+Трансформер — это архитектура нейронной сети, представленная в статье "Attention Is All You Need" (2017), которая произвела революцию в обработке естественного языка и других последовательных данных. В отличие от рекуррентных нейронных сетей, трансформеры используют механизм внимания (attention) для обработки всей последовательности параллельно.
+
+### Основные компоненты трансформера
+
+#### 1. Механизм внимания (Multi-Head Attention)
+
+Механизм внимания позволяет модели фокусироваться на различных частях входной последовательности при генерации каждого элемента выходной последовательности.
+
+```python
+import torch
+import torch.nn as nn
+import math
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model, num_heads):
+        super(MultiHeadAttention, self).__init__()
+        assert d_model % num_heads == 0
+        
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+        
+        self.wq = nn.Linear(d_model, d_model)
+        self.wk = nn.Linear(d_model, d_model)
+        self.wv = nn.Linear(d_model, d_model)
+        self.wo = nn.Linear(d_model, d_model)
+        
+    def forward(self, q, k, v, mask=None):
+        batch_size = q.size(0)
+        
+        # Линейные преобразования
+        q = self.wq(q).view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
+        k = self.wk(k).view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
+        v = self.wv(v).view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
+        
+        # Вычисление внимания
+        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)
+        
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+        
+        attention = torch.softmax(scores, dim=-1)
+        output = torch.matmul(attention, v)
+        
+        # Конкатенация и финальное преобразование
+        output = output.transpose(1, 2).contiguous().view(batch_size, -1, self.d_model)
+        output = self.wo(output)
+        
+        return output, attention
+```
+
+#### 2. Позиционное кодирование (Positional Encoding)
+
+Поскольку трансформер обрабатывает последовательность параллельно, ему необходима информация о позиции каждого элемента. Позиционное кодирование добавляет эту информацию к входным эмбеддингам.
+
+```python
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_seq_length=5000):
+        super(PositionalEncoding, self).__init__()
+        
+        pe = torch.zeros(max_seq_length, d_model)
+        position = torch.arange(0, max_seq_length, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)
+        
+        self.register_buffer('pe', pe)
+        
+    def forward(self, x):
+        return x + self.pe[:, :x.size(1)]
+```
+
+#### 3. Нормализация слоя (Layer Normalization)
+
+Нормализация слоя помогает стабилизировать обучение глубоких нейронных сетей.
+
+```python
+class LayerNorm(nn.Module):
+    def __init__(self, features, eps=1e-6):
+        super(LayerNorm, self).__init__()
+        self.a_2 = nn.Parameter(torch.ones(features))
+        self.b_2 = nn.Parameter(torch.zeros(features))
+        self.eps = eps
+        
+    def forward(self, x):
+        mean = x.mean(-1, keepdim=True)
+        std = x.std(-1, keepdim=True)
+        return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
+```
+
+#### 4. Полносвязная нейронная сеть (Feed-Forward Network)
+
+Каждый блок трансформера содержит полносвязную нейронную сеть, которая применяется к каждой позиции отдельно.
+
+```python
+class FeedForward(nn.Module):
+    def __init__(self, d_model, d_ff, dropout=0.1):
+        super(FeedForward, self).__init__()
+        self.linear1 = nn.Linear(d_model, d_ff)
+        self.dropout = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(d_ff, d_model)
+        
+    def forward(self, x):
+        return self.linear2(self.dropout(torch.relu(self.linear1(x))))
+```
+
+#### 5. Блок энкодера (Encoder Block)
+
+Блок энкодера состоит из механизма внимания и полносвязной нейронной сети с добавлением остаточных соединений и нормализации слоя.
+
+```python
+class EncoderBlock(nn.Module):
+    def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
+        super(EncoderBlock, self).__init__()
+        self.attention = MultiHeadAttention(d_model, num_heads)
+        self.norm1 = LayerNorm(d_model)
+        self.dropout1 = nn.Dropout(dropout)
+        self.ff = FeedForward(d_model, d_ff, dropout)
+        self.norm2 = LayerNorm(d_model)
+        self.dropout2 = nn.Dropout(dropout)
+        
+    def forward(self, x, mask=None):
+        attn_output, _ = self.attention(x, x, x, mask)
+        x = self.norm1(x + self.dropout1(attn_output))
+        ff_output = self.ff(x)
+        x = self.norm2(x + self.dropout2(ff_output))
+        return x
+```
+
+#### 6. Блок декодера (Decoder Block)
+
+Блок декодера содержит два механизма внимания: маскированное внимание для обработки выходной последовательности и внимание для связи с выходом энкодера.
+
+```python
+class DecoderBlock(nn.Module):
+    def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
+        super(DecoderBlock, self).__init__()
+        self.self_attention = MultiHeadAttention(d_model, num_heads)
+        self.norm1 = LayerNorm(d_model)
+        self.dropout1 = nn.Dropout(dropout)
+        self.encoder_attention = MultiHeadAttention(d_model, num_heads)
+        self.norm2 = LayerNorm(d_model)
+        self.dropout2 = nn.Dropout(dropout)
+        self.ff = FeedForward(d_model, d_ff, dropout)
+        self.norm3 = LayerNorm(d_model)
+        self.dropout3 = nn.Dropout(dropout)
+        
+    def forward(self, x, encoder_output, src_mask=None, tgt_mask=None):
+        self_attn_output, _ = self.self_attention(x, x, x, tgt_mask)
+        x = self.norm1(x + self.dropout1(self_attn_output))
+        
+        enc_attn_output, _ = self.encoder_attention(x, encoder_output, encoder_output, src_mask)
+        x = self.norm2(x + self.dropout2(enc_attn_output))
+        
+        ff_output = self.ff(x)
+        x = self.norm3(x + self.dropout3(ff_output))
+        return x
+```
+
+#### 7. Полная архитектура трансформера
+
+Полная архитектура трансформера объединяет все вышеперечисленные компоненты.
+
+```python
+class Transformer(nn.Module):
+    def __init__(self, src_vocab_size, tgt_vocab_size, d_model, num_heads, num_layers, d_ff, max_seq_length, dropout=0.1):
+        super(Transformer, self).__init__()
+        
+        self.encoder_embedding = nn.Embedding(src_vocab_size, d_model)
+        self.decoder_embedding = nn.Embedding(tgt_vocab_size, d_model)
+        self.positional_encoding = PositionalEncoding(d_model, max_seq_length)
+        
+        self.encoder_layers = nn.ModuleList([EncoderBlock(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
+        self.decoder_layers = nn.ModuleList([DecoderBlock(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
+        
+        self.fc = nn.Linear(d_model, tgt_vocab_size)
+        self.dropout = nn.Dropout(dropout)
+        
+        self.d_model = d_model
+        
+    def make_src_mask(self, src):
+        src_mask = (src != 0).unsqueeze(1).unsqueeze(2)
+        return src_mask
+    
+    def make_tgt_mask(self, tgt):
+        batch_size, tgt_len = tgt.size()
+        tgt_mask = (tgt != 0).unsqueeze(1).unsqueeze(2)
+        
+        subsequent_mask = torch.triu(torch.ones((tgt_len, tgt_len), device=tgt.device), diagonal=1).bool()
+        subsequent_mask = subsequent_mask.unsqueeze(0).unsqueeze(0)
+        
+        tgt_mask = tgt_mask & ~subsequent_mask
+        return tgt_mask
+    
+    def forward(self, src, tgt):
+        src_mask = self.make_src_mask(src)
+        tgt_mask = self.make_tgt_mask(tgt)
+        
+        src_embedded = self.dropout(self.positional_encoding(self.encoder_embedding(src) * math.sqrt(self.d_model)))
+        tgt_embedded = self.dropout(self.positional_encoding(self.decoder_embedding(tgt) * math.sqrt(self.d_model)))
+        
+        enc_output = src_embedded
+        for enc_layer in self.encoder_layers:
+            enc_output = enc_layer(enc_output, src_mask)
+        
+        dec_output = tgt_embedded
+        for dec_layer in self.decoder_layers:
+            dec_output = dec_layer(dec_output, enc_output, src_mask, tgt_mask)
+        
+        output = self.fc(dec_output)
+        return output
+```
+
+### Оптимизация трансформеров в PyTorch
+
+Для оптимизации трансформеров в PyTorch можно использовать следующие техники:
+
+1. **JIT-компиляция**: Ускорение выполнения модели с помощью компиляции в оптимизированный код.
+
+```python
+import torch.jit
+
+# Трассировка модели
+model = Transformer(...)
+example_src = torch.randint(0, 1000, (16, 32))  # [batch_size, seq_len]
+example_tgt = torch.randint(0, 1000, (16, 32))  # [batch_size, seq_len]
+traced_model = torch.jit.trace(model, (example_src, example_tgt))
+```
+
+2. **Оптимизация графа вычислений**: Использование `torch.fx` для анализа и оптимизации графа вычислений.
+
+```python
+import torch.fx
+
+# Символическая трассировка модели
+symbolic_traced = torch.fx.symbolic_trace(model)
+
+# Оптимизация графа
+optimized_graph = symbolic_traced.graph
+# ... оптимизации графа ...
+
+# Создание оптимизированной модели
+optimized_model = torch.fx.GraphModule(symbolic_traced, optimized_graph)
+```
+
+3. **Квантизация**: Уменьшение точности вычислений для ускорения и уменьшения размера модели.
+
+```python
+import torch.quantization
+
+# Динамическая квантизация
+quantized_model = torch.quantization.quantize_dynamic(
+    model, {nn.Linear}, dtype=torch.qint8
+)
+```
+
+4. **Распределенное обучение**: Обучение на нескольких GPU с помощью `torch.distributed`.
+
+```python
+import torch.distributed as dist
+import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel
+
+def setup(rank, world_size):
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+
+def train(rank, world_size):
+    setup(rank, world_size)
+    model = Transformer(...).to(rank)
+    ddp_model = DistributedDataParallel(model, device_ids=[rank])
+    # ... обучение ...
+
+world_size = torch.cuda.device_count()
+mp.spawn(train, args=(world_size,), nprocs=world_size, join=True)
+```
+
+## Работа с Hugging Face
+
+Hugging Face — это экосистема библиотек и инструментов для работы с моделями машинного обучения, особенно в области обработки естественного языка. Основная библиотека, `transformers`, предоставляет доступ к предобученным моделям и инструментам для их использования и дообучения.
+
+### Установка Hugging Face Transformers
+
+```bash
+pip install transformers
+```
+
+Для работы с PyTorch также рекомендуется установить дополнительные зависимости:
+
+```bash
+pip install transformers[torch]
+```
+
+### Основные компоненты Hugging Face
+
+1. **Модели**: Предобученные модели для различных задач.
+2. **Токенизаторы**: Инструменты для преобразования текста в токены.
+3. **Конфигурации**: Настройки моделей.
+4. **Пайплайны**: Готовые конвейеры для типовых задач.
+
+### Загрузка предобученных моделей
+
+```python
+from transformers import AutoModel, AutoTokenizer
+
+# Загрузка модели и токенизатора
+model_name = "bert-base-uncased"
+model = AutoModel.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+```
+
+### Токенизация текста
+
+```python
+# Токенизация одного предложения
+text = "Hello, how are you?"
+tokens = tokenizer(text, return_tensors="pt")
+print(tokens)
+
+# Токенизация нескольких предложений с паддингом
+texts = ["Hello, how are you?", "I'm fine, thank you!"]
+tokens = tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
+print(tokens)
+```
+
+### Инференс с предобученными моделями
+
+```python
+# Получение эмбеддингов
+outputs = model(**tokens)
+last_hidden_states = outputs.last_hidden_state
+pooled_output = outputs.pooler_output
+
+# Для моделей с конкретной задачей (например, классификация)
+from transformers import AutoModelForSequenceClassification
+
+classifier = AutoModelForSequenceClassification.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english")
+outputs = classifier(**tokens)
+logits = outputs.logits
+predictions = torch.argmax(logits, dim=1)
+print(predictions)
+```
+
+### Дообучение моделей на собственных данных
+
+```python
+from transformers import Trainer, TrainingArguments
+from datasets import load_dataset
+
+# Загрузка данных
+dataset = load_dataset("glue", "sst2")
+
+# Функция для токенизации данных
+def tokenize_function(examples):
+    return tokenizer(examples["sentence"], padding="max_length", truncation=True)
+
+tokenized_datasets = dataset.map(tokenize_function, batched=True)
+
+# Настройка обучения
+training_args = TrainingArguments(
+    output_dir="./results",
+    num_train_epochs=3,
+    per_device_train_batch_size=16,
+    per_device_eval_batch_size=64,
+    warmup_steps=500,
+    weight_decay=0.01,
+    logging_dir="./logs",
+    logging_steps=10,
+    evaluation_strategy="epoch",
+    save_strategy="epoch",
+    load_best_model_at_end=True,
+)
+
+# Создание тренера
+trainer = Trainer(
+    model=classifier,
+    args=training_args,
+    train_dataset=tokenized_datasets["train"],
+    eval_dataset=tokenized_datasets["validation"],
+    tokenizer=tokenizer,
+)
+
+# Обучение модели
+trainer.train()
+
+# Сохранение модели
+model.save_pretrained("./fine-tuned-model")
+tokenizer.save_pretrained("./fine-tuned-model")
+```
+
+### Использование пайплайнов для типовых задач
+
+```python
+from transformers import pipeline
+
+# Классификация текста
+classifier = pipeline("sentiment-analysis")
+result = classifier("I love this movie!")
+print(result)  # [{'label': 'POSITIVE', 'score': 0.9998}]
+
+# Генерация текста
+generator = pipeline("text-generation")
+result = generator("Once upon a time", max_length=50, num_return_sequences=2)
+print(result)
+
+# Заполнение маскированного текста
+unmasker = pipeline("fill-mask")
+result = unmasker("The man worked as a [MASK].")
+print(result)
+
+# Ответы на вопросы
+qa = pipeline("question-answering")
+context = "Hugging Face is a company based in New York and Paris."
+result = qa(question="Where is Hugging Face based?", context=context)
+print(result)  # {'answer': 'New York and Paris', 'start': 31, 'end': 49, 'score': 0.9975}
+```
+
+### Оптимизация моделей Hugging Face
+
+```python
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+import torch
+
+# Загрузка модели
+model_name = "bert-base-uncased"
+model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+# Квантизация модели
+model.eval()
+quantized_model = torch.quantization.quantize_dynamic(
+    model,  # модель для квантования
+    {torch.nn.Linear},  # типы слоев для квантования
+    dtype=torch.qint8  # тип данных для квантования
+)
+
+# Экспорт модели в ONNX
+input_names = ["input_ids", "attention_mask", "token_type_ids"]
+output_names = ["logits"]
+
+dummy_input = tokenizer("This is a test", return_tensors="pt")
+
+torch.onnx.export(
+    model,
+    (dummy_input["input_ids"], dummy_input["attention_mask"], dummy_input["token_type_ids"]),
+    "model.onnx",
+    input_names=input_names,
+    output_names=output_names,
+    dynamic_axes={
+        "input_ids": {0: "batch_size", 1: "sequence_length"},
+        "attention_mask": {0: "batch_size", 1: "sequence_length"},
+        "token_type_ids": {0: "batch_size", 1: "sequence_length"},
+        "logits": {0: "batch_size"},
+    },
+    opset_version=12,
+)
+```
+
+### Использование Hugging Face Accelerate для распределённого обучения
+
+```python
+from accelerate import Accelerator
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, AdamW
+from torch.utils.data import DataLoader
+
+# Инициализация акселератора
+accelerator = Accelerator()
+
+# Загрузка модели и данных
+model = AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+
+# Подготовка данных
+train_dataloader = DataLoader(...)
+eval_dataloader = DataLoader(...)
+
+# Оптимизатор
+optimizer = AdamW(model.parameters(), lr=5e-5)
+
+# Подготовка к распределённому обучению
+model, optimizer, train_dataloader, eval_dataloader = accelerator.prepare(
+    model, optimizer, train_dataloader, eval_dataloader
+)
+
+# Цикл обучения
+for epoch in range(3):
+    model.train()
+    for batch in train_dataloader:
+        outputs = model(**batch)
+        loss = outputs.loss
+        accelerator.backward(loss)
+        optimizer.step()
+        optimizer.zero_grad()
+```
+
+## Практические задачи
+
+### Задача 1: Классификация изображений с использованием предобученной модели
+
+В этой задаче мы будем использовать предобученную модель ResNet для классификации изображений.
+
+```python
+import torch
+import torch.nn as nn
+import torchvision.models as models
+import torchvision.transforms as transforms
+from PIL import Image
+
+# Загрузка предобученной модели
+model = models.resnet18(pretrained=True)
+model.eval()
+
+# Предобработка изображения
+preprocess = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+
+# Загрузка и предобработка изображения
+image_path = "path/to/your/image.jpg"
+image = Image.open(image_path)
+input_tensor = preprocess(image)
+input_batch = input_tensor.unsqueeze(0)  # создание батча
+
+# Если доступен GPU, перенос данных на него
+if torch.cuda.is_available():
+    input_batch = input_batch.to('cuda')
+    model = model.to('cuda')
+
+# Инференс
+with torch.no_grad():
+    output = model(input_batch)
+
+# Загрузка меток классов ImageNet
+with open("imagenet_classes.txt") as f:
+    classes = [line.strip() for line in f.readlines()]
+
+# Получение топ-5 предсказаний
+probabilities = torch.nn.functional.softmax(output[0], dim=0)
+top5_prob, top5_catid = torch.topk(probabilities, 5)
+
+for i in range(5):
+    print(f"{classes[top5_catid[i]]}: {top5_prob[i].item()*100:.2f}%")
+```
+
+### Задача 2: Генерация текста с использованием GPT-2
+
+В этой задаче мы будем использовать модель GPT-2 для генерации текста.
+
+```python
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+
+# Загрузка модели и токенизатора
+model_name = "gpt2"
+tokenizer = GPT2Tokenizer.from_pretrained(model_name)
+model = GPT2LMHeadModel.from_pretrained(model_name)
+
+# Перенос модели на GPU, если доступен
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = model.to(device)
+
+# Функция для генерации текста
+def generate_text(prompt, max_length=100):
+    # Токенизация входного текста
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    
+    # Генерация текста
+    outputs = model.generate(
+        inputs["input_ids"],
+        max_length=max_length,
+        num_return_sequences=1,
+        no_repeat_ngram_size=2,
+        top_k=50,
+        top_p=0.95,
+        temperature=0.7,
+        do_sample=True
+    )
+    
+    # Декодирование и вывод результата
+    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    return generated_text
+
+# Генерация текста с заданным началом
+prompt = "Once upon a time in a land far, far away"
+generated_text = generate_text(prompt)
+print(generated_text)
+```
+
+### Задача 3: Перенос стиля изображения
+
+В этой задаче мы будем использовать нейронные сети для переноса стиля с одного изображения на другое.
+
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torchvision.transforms as transforms
+import torchvision.models as models
+from PIL import Image
+import matplotlib.pyplot as plt
+
+# Загрузка и предобработка изображений
+def load_image(image_path, size=None):
+    image = Image.open(image_path)
+    if size is not None:
+        image = image.resize((size, size))
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    image = transform(image).unsqueeze(0)
+    return image
+
+# Загрузка изображений
+content_img = load_image("path/to/content.jpg", size=512)
+style_img = load_image("path/to/style.jpg", size=512)
+
+# Если доступен GPU, перенос данных на него
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+content_img = content_img.to(device)
+style_img = style_img.to(device)
+
+# Загрузка предобученной модели VGG19
+vgg = models.vgg19(pretrained=True).features.to(device).eval()
+
+# Функция для извлечения признаков из определенных слоев
+class FeatureExtractor(nn.Module):
+    def __init__(self, model, layers):
+        super(FeatureExtractor, self).__init__()
+        self.model = model
+        self.layers = layers
+        self._features = {}
+        
+    def hook(self, layer_name):
+        def hook_function(module, input, output):
+            self._features[layer_name] = output
+        return hook_function
+    
+    def forward(self, x):
+        self._features = {}
+        for name, layer in self.model._modules.items():
+            x = layer(x)
+            if name in self.layers:
+                self._features[name] = x
+        return self._features
+
+# Определение слоев для извлечения признаков
+content_layers = ['19']
+style_layers = ['0', '5', '10', '19', '28']
+
+# Создание экстрактора признаков
+feature_extractor = FeatureExtractor(vgg, content_layers + style_layers)
+
+# Функция для вычисления функции потерь содержания
+def content_loss(target_features, content_features):
+    loss = 0
+    for layer in content_layers:
+        loss += torch.mean((target_features[layer] - content_features[layer]) ** 2)
+    return loss
+
+# Функция для вычисления функции потерь стиля
+def gram_matrix(tensor):
+    _, c, h, w = tensor.size()
+    tensor = tensor.view(c, h * w)
+    gram = torch.mm(tensor, tensor.t())
+    return gram / (c * h * w)
+
+def style_loss(target_features, style_features):
+    loss = 0
+    for layer in style_layers:
+        target_gram = gram_matrix(target_features[layer])
+        style_gram = gram_matrix(style_features[layer])
+        loss += torch.mean((target_gram - style_gram) ** 2)
+    return loss
+
+# Создание изображения для оптимизации
+target_img = content_img.clone().requires_grad_(True)
+
+# Оптимизатор
+optimizer = optim.LBFGS([target_img])
+
+# Извлечение признаков из изображений содержания и стиля
+content_features = feature_extractor(content_img)
+style_features = feature_extractor(style_img)
+
+# Веса для функций потерь
+content_weight = 1
+style_weight = 1000
+
+# Цикл оптимизации
+num_steps = 300
+for step in range(num_steps):
+    def closure():
+        optimizer.zero_grad()
+        target_features = feature_extractor(target_img)
+        
+        c_loss = content_loss(target_features, content_features)
+        s_loss = style_loss(target_features, style_features)
+        
+        total_loss = content_weight * c_loss + style_weight * s_loss
+        total_loss.backward()
+        
+        if step % 50 == 0:
+            print(f"Step {step}: Content Loss: {c_loss.item()}, Style Loss: {s_loss.item()}")
+        
+        return total_loss
+    
+    optimizer.step(closure)
+
+# Преобразование результата обратно в изображение
+def tensor_to_image(tensor):
+    tensor = tensor.cpu().clone().detach()
+    tensor = tensor * torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1) + torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+    tensor = tensor.clamp(0, 1)
+    image = transforms.ToPILImage()(tensor.squeeze(0))
+    return image
+
+# Сохранение результата
+result_img = tensor_to_image(target_img)
+result_img.save("path/to/result.jpg")
+```
+
+### Задача 4: Квантизация модели для ускорения инференса
+
+В этой задаче мы будем квантовать модель для ускорения инференса и уменьшения размера модели.
+
+```python
+import torch
+import torch.nn as nn
+import torch.quantization
+import time
+
+# Определение модели с поддержкой квантизации
+class QuantizableModel(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(QuantizableModel, self).__init__()
+        self.quant = torch.quantization.QuantStub()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_size, hidden_size)
+        self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(hidden_size, output_size)
+        self.dequant = torch.quantization.DeQuantStub()
+        
+    def forward(self, x):
+        x = self.quant(x)
+        x = self.relu(self.fc1(x))
+        x = self.relu2(self.fc2(x))
+        x = self.fc3(x)
+        x = self.dequant(x)
+        return x
+
+# Создание и обучение модели
+input_size = 784
+hidden_size = 128
+output_size = 10
+
+model = QuantizableModel(input_size, hidden_size, output_size)
+
+# Предположим, что модель уже обучена
+# model.train(...)
+
+# Подготовка модели к квантизации
+model.eval()
+
+# Создание калибровочного набора данных
+calibration_data = torch.randn(100, input_size)
+
+# Измерение времени инференса до квантизации
+start_time = time.time()
+with torch.no_grad():
+    for _ in range(100):
+        output = model(torch.randn(1, input_size))
+fp32_inference_time = time.time() - start_time
+print(f"FP32 Inference Time: {fp32_inference_time:.4f} seconds")
+
+# Настройка квантизации
+model.qconfig = torch.quantization.get_default_qconfig('fbgemm')
+torch.quantization.prepare(model, inplace=True)
+
+# Калибровка модели
+with torch.no_grad():
+    for data in calibration_data:
+        model(data.unsqueeze(0))
+
+# Квантизация модели
+torch.quantization.convert(model, inplace=True)
+
+# Измерение времени инференса после квантизации
+start_time = time.time()
+with torch.no_grad():
+    for _ in range(100):
+        output = model(torch.randn(1, input_size))
+int8_inference_time = time.time() - start_time
+print(f"INT8 Inference Time: {int8_inference_time:.4f} seconds")
+print(f"Speedup: {fp32_inference_time / int8_inference_time:.2f}x")
+
+# Сохранение квантованной модели
+torch.save(model.state_dict(), "quantized_model.pth")
+
+# Сравнение размеров моделей
+import os
+
+# Сохранение FP32 модели
+torch.save(model.state_dict(), "fp32_model.pth")
+
+fp32_size = os.path.getsize("fp32_model.pth") / (1024 * 1024)  # в МБ
+int8_size = os.path.getsize("quantized_model.pth") / (1024 * 1024)  # в МБ
+
+print(f"FP32 Model Size: {fp32_size:.2f} MB")
+print(f"INT8 Model Size: {int8_size:.2f} MB")
+print(f"Size Reduction: {(1 - int8_size / fp32_size) * 100:.2f}%")
+```
+
+Это базовое руководство по программированию на PyTorch, охватывающее основные концепции и операции, а также работу с трансформерами и Hugging Face. Для более глубокого изучения рекомендую обратиться к официальной документации PyTorch и учебным материалам.
