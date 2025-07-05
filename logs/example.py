@@ -14,7 +14,7 @@ wandb.init(
         "batch_size": 16,
         "learning_rate": 5e-5,
         # любые другие гиперпараметры
-    }
+    },
 )
 
 # Эту функцию нужно вызывать внутри функции для квантизации модели
@@ -60,16 +60,18 @@ def log_quantization(
             metrics["inference/latency_s"] = time.time() - start
 
     # 3) необязательные метрики: min/max весов
-    all_weights = torch.cat([p.data.view(-1).abs()
-                            for p in model.parameters()])
-    metrics.update({
-        "weight/min": float(all_weights.min()),
-        "weight/max": float(all_weights.max()),
-    })
+    all_weights = torch.cat([p.data.view(-1).abs() for p in model.parameters()])
+    metrics.update(
+        {
+            "weight/min": float(all_weights.min()),
+            "weight/max": float(all_weights.max()),
+        }
+    )
 
     # 4) логируем вместе с шагом (если он есть)
     log_kwargs = {"step": step} if step is not None else {}
     wandb.log(metrics, **log_kwargs)
+
 
 # Пример использования функции
 
