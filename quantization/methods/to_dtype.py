@@ -1,4 +1,3 @@
-from typing import NoReturn
 from torch import dtype
 from torch import nn
 import torch

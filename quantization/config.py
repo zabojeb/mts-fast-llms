@@ -8,12 +8,13 @@ class QuantizationConfig:
     ):
         """
         Kwargs:
-            num_bits: quantity of bits for quantization (less than 8)
             compute_dtype: dtype for weight
+            num_bits: quantity of bits for quantization (less than 8)
 
         """
 
         self.compute_dtype = compute_dtype
+        self.num_bits = num_bits
 
 
 if __name__ == "__main__":
