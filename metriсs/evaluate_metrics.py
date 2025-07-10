@@ -185,6 +185,8 @@ def train_func(
             predictions = model.generate(text, max_length=512)
         elif task_type == TaskType.GENERATION:
             predictions = model.generate(text, max_length=512)
+            decoded_predictions = [processor.decode(pred, skip_special_tokens=True) for pred in predictions]
+            predictions = decoded_predictions
         elif task_type == TaskType.VISION:
             # Для OwlV2: predictions = [(boxes, scores, object_embeds), ...]
             outputs = model.image_guided_detection(images=images, text=text)
@@ -225,6 +227,8 @@ def metrics_evaluate(
     """Вычисление всех применимых метрик для задачи."""
     sns.set(style="whitegrid", palette="muted", font_scale=1.2)
     task_type = TaskType(f_type)
+    if batch_size is None:
+        batch_size = len(dataset)
     # Выполнение задачи
     predictions, metrics_data, metrics_to_check_list = train_func(
         model_name, dataset, task_type, device, batch_size, field_mapping
@@ -264,4 +268,7 @@ def metrics_evaluate(
             results[metric].append(None)
 
     # Агрегация результатов
-    return {metric: np.nanmean(values) for metric, values in results.items()}
+    return {
+        metric: values[0] if isinstance(values[0], dict) else np.nanmean(values)
+        for metric, values in results.items()
+    }
