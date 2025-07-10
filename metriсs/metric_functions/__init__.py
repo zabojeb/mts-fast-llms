@@ -17,3 +17,8 @@ from .MMLU import compute_mmlu
 from .Throughput import compute_throughput
 from .memory_usage import compute_memory
 from .energy_consumption import compute_energy
+from .compute_clip_score_vision import compute_clip_score_vision
+from .IoU import compute_iou
+from .MAP import compute_map
+
+from .F1 import compute_f1, compute_precision, compute_recall
