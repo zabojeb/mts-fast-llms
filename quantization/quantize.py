@@ -22,6 +22,9 @@ def quantize(
     if config.compute_dtype is not None:
         model = weights_to_dtype(model, config.compute_dtype)
 
+    if config.quantize_int8:
+        scaled_weights(model)
+
     return model
 
 

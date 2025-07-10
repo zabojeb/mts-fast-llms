@@ -1,9 +1,10 @@
 from torch import nn
+import gc
 
 from ..modules import *
 
 
-def scaled_weights(model: nn.Module, num_bits: int) -> nn.Module:
+def scaled_weights(model: nn.Module) -> nn.Module:
     for name, layer in model.named_modules():
         if isinstance(layer, nn.Linear):
             parent = model
@@ -12,7 +13,21 @@ def scaled_weights(model: nn.Module, num_bits: int) -> nn.Module:
             for part in parts[:-1]:
                 parent = getattr(parent, part)
 
-            setattr(parent, parts[-1], QuantizedLinear(layer.weight, num_bits))
+            setattr(
+                parent,
+                parts[-1],
+                QuantizedLinear(
+                    weight=layer.weight,
+                    bias=(
+                        layer.bias
+                        if hasattr(layer, "bias") and layer.bias is not None
+                        else None
+                    ),
+                ),
+            )
+
+    gc.collect()
+    torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":
@@ -41,7 +56,7 @@ if __name__ == "__main__":
     end = time()
     peak_memory = round(torch.cuda.max_memory_allocated() / 1e6, 1)
 
-    scaled_weights(model, 8)
+    scaled_weights(model)
     torch.cuda.empty_cache()
     gc.collect()
 
