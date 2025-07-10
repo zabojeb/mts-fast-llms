@@ -114,26 +114,34 @@ class KnowledgeDistillation(BaseOptimizer):
         student_loss_fn: Callable = F.cross_entropy
     ) -> Dict[str, torch.Tensor]:
         """
-        Вычисление функции потерь для дистилляции
-        
+        Вычисление функции потерь для дистилляции.
+
+        Основная часть формулы — это KL-дивергенция между
+        распределениями студента и учителя при температуре `T`:
+        `T^2 * KL(student_logits / T || teacher_logits / T)` с
+        параметром `reduction='batchmean'`. Затем добавляется обычная
+        cross-entropy по истинным меткам.
+
         Args:
             student_logits: Логиты студента
             teacher_logits: Логиты учителя
             targets: Истинные метки
             student_loss_fn: Функция потерь для студента
-        
+
         Returns:
             Словарь с компонентами потерь
         """
         # Soft targets (дистилляция)
-        teacher_probs = F.softmax(teacher_logits / self.config.temperature, dim=1)
-        student_log_probs = F.log_softmax(student_logits / self.config.temperature, dim=1)
+        teacher_probs = F.softmax(teacher_logits / self.config.temperature, dim=-1)
+        student_log_probs = F.log_softmax(student_logits / self.config.temperature, dim=-1)
         
+        # KL дивергенция вычисляется с учётом температурного масштаба.
+        # Формула: T^2 * KL(student_log_probs || teacher_probs)
         distillation_loss = F.kl_div(
-            student_log_probs, 
-            teacher_probs, 
-            reduction='mean'
-        )
+            student_log_probs,
+            teacher_probs,
+            reduction='batchmean'
+        ) * (self.config.temperature ** 2)
         
         # Hard targets (обычная потеря)
         student_loss = student_loss_fn(student_logits, targets)
