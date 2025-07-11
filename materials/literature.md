@@ -7,6 +7,7 @@
    - [Дистилляция знаний](#дистилляция-знаний)
    - [Бинаризация](#бинаризация)
    - [Оптимизация инференса](#оптимизация-инференса)
+   - [Факторизация и аппроксимация](#факторизация-и-аппроксимация)
    - [Архитектуры моделей](#архитектуры-моделей)
 2. [Библиотеки и фреймворки](#библиотеки-и-фреймворки)
    - [PyTorch и экосистема](#pytorch-и-экосистема)
@@ -104,6 +105,19 @@
 49. [Flamingo: a Visual Language Model for Few-Shot Learning](https://arxiv.org/abs/2204.14198) - Alayrac, J.B., et al. (2022)
 50. [Scaling Vision Transformers](https://arxiv.org/abs/2106.04560) - Zhai, X., et al. (2021)
 
+### Факторизация и аппроксимация
+
+50a. [Tensor Decompositions and Applications](https://epubs.siam.org/doi/10.1137/07070111X) - Kolda, T.G., Bader, B.W. (2009)
+50b. [Compression of Deep Convolutional Neural Networks for Fast and Low Power Mobile Applications](https://arxiv.org/abs/1511.06530) - Kim, Y.D., et al. (2016)
+50c. [Speeding up Convolutional Neural Networks with Low Rank Expansions](https://arxiv.org/abs/1405.3866) - Jaderberg, M., et al. (2014)
+50d. [Tensor-Train Decomposition](https://epubs.siam.org/doi/10.1137/090752286) - Oseledets, I.V. (2011)
+50e. [Tensor Factorization via Matrix Factorization](https://proceedings.mlr.press/v38/wang15a.html) - Wang, Y., et al. (2015)
+50f. [Tensor Contraction Layers for Parsimonious Deep Nets](https://arxiv.org/abs/1706.00439) - Kossaifi, J., et al. (2017)
+50g. [Tender: Accelerating Large Language Models via Tensor Decomposition and Runtime Requantization](https://arxiv.org/abs/2310.19859) - Yin, H., et al. (2023)
+50h. [LORD: Low Rank Decomposition Of Monolingual Code LLMs For One-Shot Compression](https://arxiv.org/abs/2306.13840) - Frantar, E., et al. (2023)
+50i. [Pivoting Factorization: A Compact Meta Low-Rank Representation of Sparsity for Efficient Inference in Large Language Models](https://arxiv.org/abs/2310.01906) - Yin, H., et al. (2023)
+50j. [Low-Rank Bottleneck in Multi-head Attention Models](https://arxiv.org/abs/2002.07028) - Winata, G.I., et al. (2020)
+
 ## Библиотеки и фреймворки
 
 ### PyTorch и экосистема
@@ -158,6 +172,17 @@
 89. [ExLlamaV2](https://github.com/turboderp/exllamav2) - Оптимизированный инференс для LLaMA с квантованием
 90. [vLLM](https://github.com/vllm-project/vllm) - Высокопроизводительный инференс LLM с PagedAttention
 
+### Факторизация и аппроксимация
+
+90a. [TensorLy](http://tensorly.org/) - Библиотека для тензорного обучения с поддержкой различных бэкендов
+90b. [TensorLy-Torch](https://tensorly.org/torch/) - Расширение TensorLy для PyTorch с факторизованными слоями
+90c. [scikit-tensor](https://github.com/mnick/scikit-tensor) - Библиотека для мультилинейной алгебры и тензорных факторизаций
+90d. [TorchTT](https://github.com/yuhuixu1993/torch-tt) - Библиотека для тензорно-поездного разложения на PyTorch
+90e. [FunFact](https://github.com/yhtang/FunFact) - Библиотека для автоматизации моделей факторизации матриц и тензоров
+90f. [Tensortools](https://github.com/ahwillia/tensortools) - Инструменты для тензорного разложения в Python
+90g. [PyTorch SVD функции](https://pytorch.org/docs/stable/generated/torch.svd.html) - Встроенные функции PyTorch для SVD
+90h. [PyTorch Low-Rank SVD](https://pytorch.org/docs/stable/generated/torch.svd_lowrank.html) - Функции для низкоранговой аппроксимации в PyTorch
+
 ### Распределенное обучение
 
 91. [DeepSpeed](https://github.com/microsoft/DeepSpeed) - Библиотека для распределенного обучения
@@ -196,6 +221,14 @@
 113. [TensorRT Documentation](https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html) - Руководство разработчика TensorRT
 114. [NVIDIA Developer Blog: TensorRT-LLM](https://developer.nvidia.com/blog/nvidia-tensorrt-llm-supercharges-large-language-model-inference-on-nvidia-h100-gpus/) - Блог о TensorRT-LLM
 115. [TensorRT-LLM Examples](https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples) - Примеры использования TensorRT-LLM
+
+### Факторизация и аппроксимация
+
+115a. [TensorLy Documentation](http://tensorly.org/stable/index.html) - Официальная документация TensorLy
+115b. [TensorLy-Torch Documentation](https://tensorly.org/torch/) - Документация TensorLy-Torch
+115c. [TensorLy Tutorials](http://tensorly.org/stable/auto_examples/index.html) - Туториалы по использованию TensorLy
+115d. [PyTorch SVD Documentation](https://pytorch.org/docs/stable/generated/torch.svd.html) - Документация по SVD в PyTorch
+115e. [PyTorch Low-Rank SVD Documentation](https://pytorch.org/docs/stable/generated/torch.svd_lowrank.html) - Документация по низкоранговому SVD в PyTorch
 
 ### FlashAttention
 
