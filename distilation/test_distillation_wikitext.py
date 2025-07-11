@@ -813,32 +813,40 @@ def distill_gpt2_wikitext(args):
                 optimizer.step()
                 
                 # Обновляем метрики
+                # Проверяем наличие ключа 'teacher_loss' в словаре losses
+                teacher_loss = losses.get('teacher_loss', torch.tensor(0.0))
                 distiller.metrics.update(
                     losses['total_loss'].item(),
                     losses['distillation_loss'].item(),
                     losses['student_loss'].item(),
-                    losses['teacher_loss'].item()
+                    teacher_loss.item() if isinstance(teacher_loss, torch.Tensor) else teacher_loss
                 )
                 
                 # Сохраняем историю для графика
                 distiller.loss_history['total'].append(losses['total_loss'].item())
                 distiller.loss_history['distill'].append(losses['distillation_loss'].item())
                 distiller.loss_history['student'].append(losses['student_loss'].item())
-                distiller.loss_history['teacher'].append(losses['teacher_loss'].item())
+                # Проверяем наличие ключа 'teacher_loss' в словаре losses
+                teacher_loss = losses.get('teacher_loss', torch.tensor(0.0))
+                distiller.loss_history['teacher'].append(teacher_loss.item() if isinstance(teacher_loss, torch.Tensor) else teacher_loss)
                 
                 # Обновляем метрики для текущей эпохи
                 epoch_losses['total'] += losses['total_loss'].item()
                 epoch_losses['distill'] += losses['distillation_loss'].item()
                 epoch_losses['student'] += losses['student_loss'].item()
-                epoch_losses['teacher'] += losses['teacher_loss'].item()
+                # Проверяем наличие ключа 'teacher_loss' в словаре losses
+                teacher_loss = losses.get('teacher_loss', torch.tensor(0.0))
+                epoch_losses['teacher'] += teacher_loss.item() if isinstance(teacher_loss, torch.Tensor) else teacher_loss
                 batch_count += 1
                 
                 # Обновляем прогресс-бар с текущими потерями
+                # Проверяем наличие ключа 'teacher_loss' в словаре losses
+                teacher_loss = losses.get('teacher_loss', torch.tensor(0.0))
                 batch_bar.set_postfix({
                     'total': losses['total_loss'].item(),
                     'distill': losses['distillation_loss'].item(),
                     'student': losses['student_loss'].item(),
-                    'teacher': losses['teacher_loss'].item()
+                    'teacher': teacher_loss.item() if isinstance(teacher_loss, torch.Tensor) else teacher_loss
                 })
             
             # Вычисляем средние потери за эпоху
