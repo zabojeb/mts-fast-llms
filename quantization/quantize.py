@@ -22,6 +22,9 @@ def quantize(
     if config.compute_dtype is not None:
         model = weights_to_dtype(model, config.compute_dtype)
 
+    if config.num_bits is not None:
+        scaled_weights(model=model, num_bits=config.num_bits)
+
     return model
 
 
