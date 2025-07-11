@@ -46,7 +46,7 @@ MODEL_CONFIGS = {
 TASK_METRICS = {
     TaskType.CLASSIFICATION: ["accuracy", "ece", "mce", "mmlu", "glue", "latency", "memory", "flops", "throughput", "energy"],
     TaskType.TRANSLATION: ["bleu", "rouge", "meteor", "bert_score", "latency", "memory", "flops", "throughput", "energy"],
-    TaskType.GENERATION: ["bleu", "rouge", "meteor", "bert_score", "perplexity", "clip_score", "latency", "memory", "flops", "throughput", "energy"],
+    TaskType.GENERATION: ["bleu", "rouge", "meteor", "bert_score", "perplexity", "latency", "memory", "flops", "throughput", "energy"],
     TaskType.VISION: ["iou", "map", "precision", "recall", "f1", "clip_score_vision", "latency", "memory", "flops", "throughput", "energy"]
 }
 
@@ -65,7 +65,7 @@ base_metrics = {
     "f1": compute_f1,
     "clip_score": compute_clip_score,
     "clip_score_vision": compute_clip_score_vision,
-    "cider": CIDEr,
+    "cider": compute_cider,
     "spice": compute_spice,
     "latency": compute_latency,
     "memory": compute_memory,
@@ -81,7 +81,21 @@ base_metrics = {
 
 
 def load_model(model_name: str, device: str = "cuda") -> Tuple[Any, Any]:
-    """Загрузка модели и токенизатора/процессора."""
+    """Load a model and its tokenizer/processor.
+
+    Args:
+        model_name: Name of the model (e.g., 'gpt2', 'owlv2').
+        device: Device to load the model on ('cuda' or 'cpu').
+
+    Returns:
+        Tuple of (model, processor) where model is a PyTorch module and processor is a tokenizer or vision processor.
+
+    Raises:
+        ValueError: If model_name is not supported.
+
+    Note:
+        Ensure the model is compatible with the task (e.g., fine-tuned for classification if used with TaskType.CLASSIFICATION).
+    """
     if model_name not in MODEL_CLASSES:
         raise ValueError(f"Model {model_name} not supported. Choose from {list(MODEL_CLASSES.keys())}")
 
@@ -99,13 +113,22 @@ def train_func(
         batch_size: Optional[int] = None,
         field_mapping: Optional[Dict[str, str]] = None
 ) -> Tuple[Any, Dict[str, Any], List[str]]:
-    """Выполнение задачи и сбор данных для метрик.
-        :param model_name:
-        :param dataset:
-        :param batch_size:
-        :param device:
-        :param task_type:
-        :param field_mapping: измененные имена полей
+    """Perform task inference and collect data for metrics.
+
+    Args:
+        model_name: Name of the model to load (e.g., 'gpt2', 'owlv2').
+        dataset: Hugging Face dataset with task-specific fields.
+        task_type: Type of task (CLASSIFICATION, TRANSLATION, GENERATION, VISION).
+        device: Device to run the model on ('cuda' or 'cpu').
+        batch_size: Number of samples to process (defaults to dataset size if None).
+        field_mapping: Custom field names for dataset columns (e.g., {"text": "input", "task_name": "glue_sst2"}).
+                       Use "task_name" for metrics like glue (e.g., "glue_sst2"), helm ("helm"), or mmlu ("mmlu").
+
+    Returns:
+        Tuple of (predictions, metrics_data, metrics_to_check_list), where:
+        - predictions: Task-specific outputs (List[str] for text tasks, List[Tuple] for vision).
+        - metrics_data: Dictionary with model inputs and performance metrics.
+        - metrics_to_check_list: List of metric names to evaluate.
     """
     model, processor = load_model(model_name, device)
     field_mapping = field_mapping or {}
@@ -118,11 +141,16 @@ def train_func(
                                                                                     TaskType.GENERATION,
                                                                                     TaskType.VISION] else None
 
+    #Извлечение данных из датасета
     text = dataset[text_field] if text_field in dataset.column_names else None
     images = dataset[image_field] if image_field in dataset.column_names and task_type == TaskType.VISION else None
     labels = dataset[
         label_field] if label_field in dataset.column_names and task_type == TaskType.CLASSIFICATION else None
     references = dataset[reference_field] if reference_field in dataset.column_names else None
+
+    # Ensure references is List[List[str]] for TRANSLATION and GENERATION
+    if task_type in [TaskType.TRANSLATION, TaskType.GENERATION] and references:
+        references = [[ref] if isinstance(ref, str) else ref for ref in references]
 
     # Проверка входных данных
     if task_type == TaskType.CLASSIFICATION and (not text or not labels):
@@ -131,20 +159,26 @@ def train_func(
         raise ValueError("Translation requires text and references")
     elif task_type == TaskType.GENERATION and not text:
         raise ValueError("Generation requires text")
-    elif task_type == TaskType.VISION and (not text or not images):
-        raise ValueError("Vision requires text and images")
+    elif task_type == TaskType.VISION:
+        if not text or not images or not references:
+            raise ValueError("Vision requires text, images, and references")
+        for ref in references:
+            if not isinstance(ref, tuple) or len(ref) != 2 or not isinstance(ref[0], torch.Tensor) or not isinstance(
+                    ref[1], torch.Tensor):
+                raise ValueError("Vision references must be List[Tuple[torch.Tensor, torch.Tensor]]")
 
     # Подготовка данных
     metrics_data = {
         "model": model,
+        "raw_text": text,
         "text": text,
         "images": images,
         "labels": labels,
         "references": references,
         "processor": processor,
         "device": device,
-        "batch_size": batch_size,
-        "task_name": task_type.value,
+        "batch_size": batch_size if batch_size is not None else len(dataset),
+        "task_name": field_mapping.get("task_name", task_type.value),  # Allow custom task_name
         "timestamps": [time.time()],
         "gpu_memory": None,
         "cpu_memory": None,
@@ -180,11 +214,25 @@ def train_func(
     # Выполнение задачи
     with torch.no_grad():
         if task_type == TaskType.CLASSIFICATION:
-            predictions = model(text).logits
-        elif task_type == TaskType.TRANSLATION:
-            predictions = model.generate(text, max_length=512)
-        elif task_type == TaskType.GENERATION:
-            predictions = model.generate(text, max_length=512)
+            # Get model outputs (assuming logits for classification)
+            outputs = model(**text)
+            logits = outputs.logits  # Shape: [batch_size, num_classes]
+
+            # Compute probabilities and confidences
+            probabilities = torch.softmax(logits, dim=-1)
+            confidences = probabilities.max(dim=-1)[0].cpu().tolist()  # Max probability per sample
+
+            # Compute predictions as class indices
+            pred_indices = torch.argmax(logits, dim=-1).cpu().tolist()
+            decoded_predictions = [str(i) for i in pred_indices]  # Convert to strings for metric compatibility
+
+            # Store in metrics_data
+            predictions = decoded_predictions
+            metrics_data["confidences"] = confidences
+            # Ensure labels are strings for consistency with predictions
+            metrics_data["labels"] = [str(label) for label in metrics_data["labels"]]
+        elif task_type in [TaskType.TRANSLATION, TaskType.GENERATION]:
+            predictions = model.generate(**text, max_length=512)
             decoded_predictions = [processor.decode(pred, skip_special_tokens=True) for pred in predictions]
             predictions = decoded_predictions
         elif task_type == TaskType.VISION:
@@ -200,10 +248,6 @@ def train_func(
 
     metrics_data["emissions"] = carbon_tracker.stop()
     metrics_data["predictions"] = predictions
-
-    # Конфиденсы для классификации
-    if task_type == TaskType.CLASSIFICATION and hasattr(model, "predict_proba"):
-        metrics_data["confidences"] = model.predict_proba(text)
 
     # Эмбеддинги изображений для vision (OwlV2)
     if task_type == TaskType.VISION and model_name == "owlv2":
@@ -223,13 +267,28 @@ def metrics_evaluate(
         batch_size: Optional[int] = None,
         field_mapping: Optional[Dict[str, str]] = None,
         log: bool = True
-) -> dict[str, floating]:
-    """Вычисление всех применимых метрик для задачи."""
+) -> Dict[str, Union[float, Dict[str, float], None]]:
+    """Evaluate all applicable metrics for a given task.
+
+    Args:
+        model_name: Name of the model to evaluate.
+        dataset: Hugging Face dataset with task-specific fields.
+        f_type: Task type as a string (e.g., 'classification').
+        device: Device to run the model on ('cuda' or 'cpu').
+        batch_size: Number of samples to process (defaults to dataset size if None).
+        field_mapping: Custom field names for dataset columns.
+        log: Whether to log metric results.
+
+    Returns:
+        Dictionary mapping metric names to their values (float, dict, or None).
+    """
+    # Set plotting style
     sns.set(style="whitegrid", palette="muted", font_scale=1.2)
     task_type = TaskType(f_type)
     if batch_size is None:
         batch_size = len(dataset)
-    # Выполнение задачи
+
+    # Run inference and collect metrics data
     predictions, metrics_data, metrics_to_check_list = train_func(
         model_name, dataset, task_type, device, batch_size, field_mapping
     )
@@ -237,14 +296,17 @@ def metrics_evaluate(
     if log:
         logger.info(f"Evaluating metrics for task: {f_type}, model: {model_name}")
 
+    # Compute each metric
     results = {metric: [] for metric in metrics_to_check_list}
-
     for metric in metrics_to_check_list:
         try:
             metric_func = base_metrics[metric]
+            # Select text input: raw_text for string-based metrics, text for tokenized inputs
+            text_input = metrics_data["text"] if metric == "flops" and task_type == TaskType.VISION else metrics_data[
+                "raw_text"]
             metric_value = metric_func(
                 model=metrics_data["model"],
-                text=metrics_data["text"],
+                text=text_input,
                 images=metrics_data["images"],
                 references=metrics_data["references"],
                 labels=metrics_data["labels"],
@@ -267,8 +329,15 @@ def metrics_evaluate(
             logger.warning(f"Error computing {metric}: {str(e)}")
             results[metric].append(None)
 
-    # Агрегация результатов
+    """
+        Если values[0] — словарь (rouge, bert_score, glue), возвращаем его без изменений.
+        Для скалярных значений (float или None) применяем np.nanmean, игнорируя None.
+        Используем Union[float, Dict, None] в аннотации возвращаемого типа для совместимости.
+        """
+
+    # Aggregate results: return dicts as-is, compute mean for scalars
     return {
-        metric: values[0] if isinstance(values[0], dict) else np.nanmean(values)
+        metric: values[0] if isinstance(values[0], dict) else np.nanmean([v for v in values if v is not None]) if any(
+            v is not None for v in values) else None
         for metric, values in results.items()
     }

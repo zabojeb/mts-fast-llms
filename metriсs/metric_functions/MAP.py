@@ -8,7 +8,11 @@ def compute_map(
     iou_threshold: float = 0.5,
     **kwargs
 ) -> float:
-    """Вычисляет mean Average Precision (mAP) для объектного детектирования."""
+    """Вычисляет mean Average Precision (mAP) для объектного детектирования.
+
+    Note:
+        Assumes single-class or class-agnostic detection. For multi-class mAP, extend to group by true_labels.
+    """
     if not predictions or not references:
         return 0.0
 
