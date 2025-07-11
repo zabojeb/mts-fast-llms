@@ -1,1 +1,0 @@
-python test_distillation_wikitext.py --teacher_model gpt2-xl --student_model gpt2 --dataset wikitext --temperature 2.0 --alpha 0.7 --beta 0.3 --epochs 250 --batch_size 16 --save_metrics --save_plot
