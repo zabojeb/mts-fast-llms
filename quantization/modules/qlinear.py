@@ -1,3 +1,6 @@
+from ...exceptions import QuantizationError
+
+from torchao.dtypes.uintx.bitpacking import pack, unpack
 import torch.nn.functional as F
 from typing import Optional
 from torch import Tensor
@@ -10,46 +13,73 @@ class QuantizedLinear(nn.Module):
         self,
         weight: nn.Parameter,
         bias: Optional[nn.Parameter] = None,
+        num_bits: int = 8,
     ):
         super().__init__()
 
+        if num_bits < 1 or num_bits > 8:
+            raise QuantizationError("Number of bits must be from 1 to 8")
+
         self.bias = bias
+        self.num_bits = num_bits
+        self.in_features = weight.shape[1]
+        self.out_features = weight.shape[0]
 
         with torch.no_grad():
-            min_val = weight.detach().min()
-            max_val = weight.detach().max()
+            qmax = 2 ** (num_bits) - 1
 
-            self.scale = ((max_val - min_val) / 255).to(weight.dtype)
-            self.zero_point = 127 - max_val / self.scale
+            min_val, max_val = torch.aminmax(weight)
 
-            if self.zero_point < -128:
-                self.zero_point = torch.tensor([-128], dtype=torch.int8).to(
+            self.scale = ((max_val - min_val) / qmax).to(weight.dtype)
+            self.zero_point = qmax - max_val / self.scale
+
+            if self.zero_point < 0:
+                self.zero_point = torch.tensor([0], dtype=weight.dtype).to(
                     min_val.device
                 )
-            elif self.zero_point > 127:
-                self.zero_point = torch.tensor([127], dtype=torch.int8).to(
+            elif self.zero_point > qmax:
+                self.zero_point = torch.tensor([qmax], dtype=weight.dtype).to(
                     max_val.device
                 )
 
             self.zero_point.round_()
-            self.zero_point = self.zero_point.to(weight.dtype)
 
             self.weight = self.zero_point + weight / self.scale
-            self.weight.clamp_(-128, 127).round_()
-            self.weight = self.weight.to(torch.int8)
+            self.weight.clamp_(0, qmax).round_()
+            self.weight = self.weight.to(torch.uint8)
+
+            try:
+                self.weight = (
+                    pack(self.weight, num_bits, -2) if num_bits != 8 else self.weight
+                )
+            except AssertionError:
+                # TODO: Implement it
+                raise QuantizationError(
+                    "Input and output features must be divisble by scale (8)"
+                )
 
     def forward(self, x: Tensor):
         return F.linear(
-            # x, (self.scale * (self.weight.float() - self.zero_point)), self.bias  Time coeff: ~2.14 x; Memory coeff: 2.53 x
             x,
-            (self.scale * (self.weight - self.zero_point)),
-            self.bias,  #                                                           Time coeff: ~1.49 x; Memory coeff: 2.53 x
+            (
+                self.scale
+                * (
+                    (
+                        unpack(self.weight, self.num_bits, -2)
+                        if self.num_bits != 8
+                        else self.weight
+                    )
+                    - self.zero_point
+                )
+            ),
+            self.bias,
         )
 
     def __repr__(self):
-        return "QuantizedLinear(in_features={}, out_features={}, scale={:.6f}, zero_point={})".format(
-            self.weight.shape[-1],
-            self.weight.shape[-2],
+        return "QuantizedLinear(in_features={}, out_features={}, scale={:.6f}, zero_point={}, num_bits={})".format(
+            self.in_features,
+            self.out_features,
             self.scale,
             self.zero_point,
+            self.num_bits,
         )

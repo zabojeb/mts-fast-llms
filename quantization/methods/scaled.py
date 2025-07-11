@@ -4,7 +4,7 @@ import gc
 from ..modules import *
 
 
-def scaled_weights(model: nn.Module) -> nn.Module:
+def scaled_weights(model: nn.Module, num_bits: int) -> nn.Module:
     for name, layer in model.named_modules():
         if isinstance(layer, nn.Linear):
             parent = model
@@ -17,17 +17,17 @@ def scaled_weights(model: nn.Module) -> nn.Module:
                 parent,
                 parts[-1],
                 QuantizedLinear(
-                    weight=layer.weight,
+                    weight=layer.weight.detach(),
                     bias=(
-                        layer.bias
+                        layer.bias.detach()
                         if hasattr(layer, "bias") and layer.bias is not None
                         else None
                     ),
+                    num_bits=num_bits,
                 ),
             )
 
     gc.collect()
-    torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":
