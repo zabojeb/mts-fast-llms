@@ -13,31 +13,74 @@ import os
 import json
 import argparse
 from tqdm import tqdm, trange
+import copy
+import datetime
 from distillation import KnowledgeDistillation, DistillationConfig, create_optimizer
+
+# Функция для создания уникальной директории для дистилляции
+def create_distillation_dir(base_dir, folder_name=None):
+    """
+    Создает уникальную директорию для сохранения результатов дистилляции.
+    
+    Args:
+        base_dir: Базовая директория для сохранения результатов
+        folder_name: Опциональное название папки (если не указано, будет создана папка с временной меткой)
+    
+    Returns:
+        Путь к созданной директории
+    """
+    # Получаем текущую дату и время
+    now = datetime.datetime.now()
+    timestamp = now.strftime("%d.%m.%y.%H.%M.%S")
+    
+    # Определяем счетчик дистилляций
+    distillation_count = 1
+    while True:
+        # Если указано название папки, используем его
+        if folder_name:
+            dir_name = f"distillation#{distillation_count}_{folder_name}_{timestamp}"
+        else:
+            dir_name = f"distillation#{distillation_count}_{timestamp}"
+        
+        # Создаем полный путь
+        full_path = os.path.join(base_dir, dir_name)
+        
+        # Проверяем, существует ли такая директория
+        if not os.path.exists(full_path):
+            # Создаем директорию
+            os.makedirs(full_path, exist_ok=True)
+            return full_path
+        
+        # Если директория существует, увеличиваем счетчик
+        distillation_count += 1
 
 # Настройка аргументов командной строки
 def parse_args():
     parser = argparse.ArgumentParser(description='Тестирование модуля дистилляции знаний на WikiText')
-    parser.add_argument('--teacher_model', type=str, default='gpt2-medium', help='Модель учителя')
+    parser.add_argument('--teacher_model', type=str, default='gpt2-xl', help='Модель учителя')
     parser.add_argument('--student_model', type=str, default='gpt2', help='Модель студента')
     parser.add_argument('--dataset', type=str, default='wikitext', help='Датасет для обучения (wikitext, pokemon или путь к файлу)')
     parser.add_argument('-r', '--dataset_path', type=str, help='Путь к пользовательскому датасету')
-    parser.add_argument('--temperature', type=float, default=4.0, help='Температура для дистилляции')
+    parser.add_argument('--temperature', type=float, default=2.0, help='Температура для дистилляции')
     parser.add_argument('--alpha', type=float, default=0.7, help='Вес для soft targets')
     parser.add_argument('--beta', type=float, default=0.3, help='Вес для hard targets')
-    parser.add_argument('--epochs', type=int, default=2, help='Количество эпох обучения')
-    parser.add_argument('--batch_size', type=int, default=4, help='Размер батча')
+    parser.add_argument('--epochs', type=int, default=100, help='Количество эпох обучения')
+    parser.add_argument('--batch_size', type=int, default=16, help='Размер батча')
     parser.add_argument('--lr', type=float, default=5e-5, help='Скорость обучения')
-    parser.add_argument('--max_length', type=int, default=128, help='Максимальная длина последовательности')
-    parser.add_argument('--sample_size', type=int, default=100, help='Размер выборки из датасета')
+    parser.add_argument('--max_length', type=int, default=256, help='Максимальная длина последовательности')
+    parser.add_argument('--sample_size', type=int, default=1000, help='Размер выборки из датасета')
     parser.add_argument('--save_metrics', action='store_true', help='Сохранить метрики в JSON')
     parser.add_argument('--save_plot', action='store_true', help='Сохранить график потерь')
     parser.add_argument('--no_cuda', action='store_true', help='Не использовать CUDA')
     parser.add_argument('--output_dir', type=str, default='./output', help='Директория для сохранения результатов')
-    parser.add_argument('--checkpoint_interval', type=int, default=1, help='Интервал сохранения чекпоинтов (в эпохах)')
+    parser.add_argument('--checkpoint_interval', type=int, default=50, help='Интервал сохранения чекпоинтов (в эпохах)')
     parser.add_argument('--run_tests', action='store_true', help='Запустить тесты (по умолчанию тесты пропускаются)')
     parser.add_argument('--skip_demo', action='store_true', help='Пропустить демонстрацию')
     parser.add_argument('--install_deps', action='store_true', help='Установить зависимости')
+    parser.add_argument('--skip_validation', action='store_true', help='Пропустить валидацию улучшения студента')
+    parser.add_argument('--create_comparison_table', action='store_true', help='Создать сравнительную таблицу до и после дистилляции')
+    parser.add_argument('--save_best_model', action='store_true', help='Сохранять лучшую модель по валидационной выборке (по умолчанию отключено)')
+    parser.add_argument('--folder_name', type=str, help='Название папки для сохранения результатов дистилляции (если не указано, будет создана папка с временной меткой)')
     return parser.parse_args()
 
 # Класс для подготовки данных WikiText
@@ -212,8 +255,196 @@ def print_model_info():
     print("  - Встроенные: wikitext, pokemon")
     print("  - Пользовательские: укажите путь с помощью -r или --dataset_path")
 
-def plot_perplexity(distiller):
-    """Строит график перплексии для учителя и студента"""
+def validate_student_improvement(student_model, teacher_model, validation_loader, device):
+    """Проверяет улучшение студента после дистилляции
+    
+    Args:
+        student_model: Модель студента после дистилляции
+        teacher_model: Модель учителя
+        validation_loader: Загрузчик данных для валидации
+        device: Устройство для вычислений
+        
+    Returns:
+        dict: Словарь с результатами валидации
+    """
+    print("\nПроведение валидации улучшения студента...")
+    
+    # Переводим модели в режим оценки и на нужное устройство
+    student_model.eval()
+    teacher_model.eval()
+    
+    # Убедимся, что модели находятся на правильном устройстве
+    student_model = student_model.to(device)
+    teacher_model = teacher_model.to(device)
+    
+    # Инициализируем счетчики для потерь
+    student_loss_total = 0.0
+    teacher_loss_total = 0.0
+    total_samples = 0
+    
+    # Функция для расчета потерь языковой модели
+    def compute_loss(logits, targets):
+        # Убедимся, что логиты и цели на одном устройстве
+        if logits.device != targets.device:
+            logits = logits.to(targets.device)
+            
+        # Преобразуем логиты в формат [batch_size * seq_len, vocab_size]
+        logits_flat = logits.view(-1, logits.size(-1))
+        # Преобразуем целевые значения в формат [batch_size * seq_len]
+        targets_flat = targets.view(-1)
+        # Вычисляем потери, игнорируя паддинг (0)
+        loss = F.cross_entropy(logits_flat, targets_flat, ignore_index=0, reduction='sum')
+        # Нормализуем потери по количеству ненулевых токенов
+        non_pad_mask = targets_flat != 0
+        num_tokens = non_pad_mask.sum().item()
+        return loss / num_tokens if num_tokens > 0 else loss
+    
+    # Проходим по валидационному набору данных
+    with torch.no_grad():
+        for inputs, targets in tqdm(validation_loader, desc="Валидация"):
+            inputs = inputs.to(device)
+            targets = targets.to(device)
+            
+            # Получаем предсказания моделей
+            student_logits = student_model(inputs)
+            teacher_logits = teacher_model(inputs)
+            
+            # Вычисляем потери
+            student_loss = compute_loss(student_logits, targets)
+            teacher_loss = compute_loss(teacher_logits, targets)
+            
+            # Обновляем счетчики
+            batch_size = inputs.size(0)
+            student_loss_total += student_loss.item() * batch_size
+            teacher_loss_total += teacher_loss.item() * batch_size
+            total_samples += batch_size
+    
+    # Вычисляем средние потери
+    avg_student_loss = student_loss_total / total_samples
+    avg_teacher_loss = teacher_loss_total / total_samples
+    
+    # Вычисляем перплексию
+    student_perplexity = np.exp(avg_student_loss)
+    teacher_perplexity = np.exp(avg_teacher_loss)
+    
+    # Определяем, улучшился ли студент
+    is_improved = avg_student_loss < avg_teacher_loss
+    
+    # Формируем результаты
+    results = {
+        'avg_student_loss': avg_student_loss,
+        'avg_teacher_loss': avg_teacher_loss,
+        'student_perplexity': student_perplexity,
+        'teacher_perplexity': teacher_perplexity,
+        'is_improved': is_improved
+    }
+    
+    # Выводим результаты
+    print(f"\nРезультаты валидации:")
+    print(f"Средняя потеря студента: {avg_student_loss:.4f}")
+    print(f"Средняя потеря учителя: {avg_teacher_loss:.4f}")
+    print(f"Перплексия студента: {student_perplexity:.2f}")
+    print(f"Перплексия учителя: {teacher_perplexity:.2f}")
+    
+    if is_improved:
+        print("\n✅ Студент успешно улучшен! Его потери ниже, чем у учителя.")
+    else:
+        print("\n⚠️ Студент не превзошел учителя. Возможно, требуется дополнительное обучение или настройка гиперпараметров.")
+    
+    return results
+
+def create_comparison_table(comparison_data, output_dir):
+    """Создает сравнительную таблицу метрик до и после дистилляции
+    
+    Args:
+        comparison_data: Словарь с данными для сравнения
+        output_dir: Путь для сохранения таблицы
+        
+    Returns:
+        pd.DataFrame: Таблица сравнения
+    """
+    print("\nСоздание сравнительной таблицы...")
+    
+    # Извлекаем данные из словаря comparison_data
+    before_metrics = comparison_data.get('before', {})
+    after_metrics = comparison_data.get('after', {})
+    parameter_changes = comparison_data.get('parameter_changes', {})
+    teacher_params = comparison_data.get('teacher_params', {})
+    student_params = comparison_data.get('student_params', {})
+    compression_ratio = comparison_data.get('compression_ratio', 'Н/Д')
+    avg_student_loss = comparison_data.get('avg_student_loss', 'Н/Д')
+    avg_total_loss = comparison_data.get('avg_total_loss', 'Н/Д')
+    avg_distillation_loss = comparison_data.get('avg_distillation_loss', 'Н/Д')
+    elapsed_time = comparison_data.get('elapsed_time', 'Н/Д')
+    
+    # Создаем словарь для таблицы
+    data = {
+        'Метрика': [
+            'Потеря студента',
+            'Перплексия студента',
+            'Количество параметров студента',
+            'Количество параметров учителя',
+            'Коэффициент сжатия',
+            'Средняя потеря студента',
+            'Средняя общая потеря',
+            'Средняя потеря дистилляции',
+            'Время выполнения (сек)'
+        ],
+        'До дистилляции': [
+            before_metrics.get('student_loss', 'Н/Д'),
+            before_metrics.get('student_perplexity', 'Н/Д'),
+            student_params.get('total', 'Н/Д'),
+            teacher_params.get('total', 'Н/Д'),
+            compression_ratio,
+            'Н/Д',
+            'Н/Д',
+            'Н/Д',
+            'Н/Д'
+        ],
+        'После дистилляции': [
+            after_metrics.get('student_loss', 'Н/Д'),
+            after_metrics.get('student_perplexity', 'Н/Д'),
+            student_params.get('total', 'Н/Д'),
+            teacher_params.get('total', 'Н/Д'),
+            compression_ratio,
+            avg_student_loss,
+            avg_total_loss,
+            avg_distillation_loss,
+            elapsed_time
+        ],
+        'Изменение': ['Н/Д', 'Н/Д', 'Н/Д', 'Н/Д', 'Н/Д', 'Н/Д', 'Н/Д', 'Н/Д', 'Н/Д']
+    }
+    
+    # Вычисляем изменения, если есть данные
+    if before_metrics.get('student_loss') is not None and after_metrics.get('student_loss') is not None:
+        loss_change = after_metrics['student_loss'] - before_metrics['student_loss']
+        data['Изменение'][0] = f"{loss_change:.4f} ({loss_change/before_metrics['student_loss']*100:.2f}%)"
+    
+    if before_metrics.get('student_perplexity') is not None and after_metrics.get('student_perplexity') is not None:
+        perplexity_change = after_metrics['student_perplexity'] - before_metrics['student_perplexity']
+        data['Изменение'][1] = f"{perplexity_change:.2f} ({perplexity_change/before_metrics['student_perplexity']*100:.2f}%)"
+    
+    # Создаем DataFrame
+    df = pd.DataFrame(data)
+    
+    # Выводим таблицу
+    print("\nСравнительная таблица:")
+    print(df.to_string(index=False))
+    
+    # Сохраняем таблицу в CSV
+    csv_path = os.path.join(output_dir, 'comparison_table.csv')
+    df.to_csv(csv_path, index=False)
+    print(f"Таблица сохранена в {csv_path}")
+    
+    return df
+
+def plot_perplexity(distiller, output_dir=None):
+    """Строит график перплексии для учителя и студента
+    
+    Args:
+        distiller: Объект дистилляции
+        output_dir: Путь для сохранения графиков (если None, то графики не сохраняются)
+    """
     # Получаем историю потерь из объекта дистилляции
     loss_history = distiller.get_loss_history()
     
@@ -247,19 +478,25 @@ def plot_perplexity(distiller):
     
     plt.tight_layout()
     
-    # Сохраняем график с высоким разрешением
-    os.makedirs('output', exist_ok=True)
-    plot_path = os.path.join('output', 'perplexity_plot.png')
-    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-    print(f"График перплексии сохранен в {plot_path}")
+    # Сохраняем график с высоким разрешением, если указан путь
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        plot_path = os.path.join(output_dir, 'perplexity_plot.png')
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"График перплексии сохранен в {plot_path}")
     
     # Выводим средние значения перплексии
     print(f"Средняя перплексия учителя: {avg_teacher_perplexity:.2f}")
     print(f"Средняя перплексия студента: {avg_student_perplexity:.2f}")
     plt.close()
 
-def plot_losses(distiller):
-    """Строит график потерь дистилляции"""
+def plot_losses(distiller, output_dir=None):
+    """Строит график потерь дистилляции
+    
+    Args:
+        distiller: Объект дистилляции
+        output_dir: Путь для сохранения графиков (если None, то графики не сохраняются)
+    """
     import matplotlib.pyplot as plt
     import os
     
@@ -293,12 +530,94 @@ def plot_losses(distiller):
     # Настраиваем расположение
     plt.tight_layout()
     
-    # Сохраняем график
-    os.makedirs('./output', exist_ok=True)
-    plt.savefig('./output/loss_plot.png', dpi=300, bbox_inches='tight')
-    plt.close()
+    # Сохраняем график, если указан путь
+    if output_dir:
+        plot_path = os.path.join(output_dir, 'loss_plot.png')
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"График потерь сохранен в {plot_path}")
     
-    print(f"График потерь сохранен в ./output/loss_plot.png")
+    plt.close()
+
+def analyze_student_parameters(student_model_before, student_model_after):
+    """Анализирует изменения параметров студента до и после дистилляции
+    
+    Args:
+        student_model_before: Модель студента до дистилляции
+        student_model_after: Модель студента после дистилляции
+        
+    Returns:
+        dict: Словарь с информацией об изменениях параметров
+    """
+    print("\nАнализ изменений параметров студента...")
+    
+    # Получаем параметры моделей
+    params_before = {name: param.clone().detach().cpu().numpy() for name, param in student_model_before.named_parameters()}
+    params_after = {name: param.clone().detach().cpu().numpy() for name, param in student_model_after.named_parameters()}
+    
+    # Инициализируем счетчики
+    total_params = 0
+    total_change = 0.0
+    max_change = 0.0
+    min_change = float('inf')
+    max_change_layer = ""
+    min_change_layer = ""
+    layer_changes = {}
+    
+    # Анализируем изменения по слоям
+    for name in params_before:
+        if name in params_after:
+            # Вычисляем абсолютную разницу
+            diff = np.abs(params_after[name] - params_before[name])
+            avg_diff = np.mean(diff)
+            max_diff = np.max(diff)
+            
+            # Обновляем счетчики
+            num_params = params_before[name].size
+            total_params += num_params
+            total_change += avg_diff * num_params
+            
+            # Обновляем максимальное и минимальное изменение
+            if avg_diff > max_change:
+                max_change = avg_diff
+                max_change_layer = name
+            if avg_diff < min_change:
+                min_change = avg_diff
+                min_change_layer = name
+            
+            # Сохраняем изменения для слоя
+            layer_changes[name] = {
+                'avg_change': avg_diff,
+                'max_change': max_diff,
+                'num_params': num_params
+            }
+    
+    # Вычисляем среднее изменение по всем параметрам
+    avg_change = total_change / total_params if total_params > 0 else 0.0
+    
+    # Формируем результаты
+    results = {
+        'total': total_params,
+        'avg_change': avg_change,
+        'max_change': max_change,
+        'min_change': min_change,
+        'max_change_layer': max_change_layer,
+        'min_change_layer': min_change_layer,
+        'layer_changes': layer_changes
+    }
+    
+    # Выводим результаты
+    print(f"Общее количество параметров: {total_params:,}")
+    print(f"Среднее изменение параметров: {avg_change:.6f}")
+    print(f"Максимальное изменение: {max_change:.6f} (слой: {max_change_layer})")
+    print(f"Минимальное изменение: {min_change:.6f} (слой: {min_change_layer})")
+    
+    # Выводим топ-5 слоев с наибольшими изменениями
+    print("\nТоп-5 слоев с наибольшими изменениями:")
+    top_layers = sorted(layer_changes.items(), key=lambda x: x[1]['avg_change'], reverse=True)[:5]
+    for name, info in top_layers:
+        print(f"  {name}: {info['avg_change']:.6f} (параметров: {info['num_params']:,})")
+    
+    return results
 
 # Функция для дистилляции GPT-2 на выбранном датасете
 def distill_gpt2_wikitext(args):
@@ -307,6 +626,10 @@ def distill_gpt2_wikitext(args):
     print(f"  Датасет: {args.dataset}")
     print(f"  Температура: {args.temperature}, Alpha: {args.alpha}, Beta: {args.beta}")
     print(f"  Эпохи: {args.epochs}, Размер батча: {args.batch_size}, LR: {args.lr}")
+    
+    # Создаем уникальную директорию для текущей дистилляции
+    distillation_dir = create_distillation_dir(args.output_dir, args.folder_name)
+    print(f"Результаты дистилляции будут сохранены в: {distillation_dir}")
     
     # Определяем устройство
     device = "cpu" if args.no_cuda or not torch.cuda.is_available() else "cuda"
@@ -327,6 +650,9 @@ def distill_gpt2_wikitext(args):
         teacher_model = GPT2LMHeadModel.from_pretrained(args.teacher_model)
         student_model = GPT2LMHeadModel.from_pretrained(args.student_model)
     
+    # Создаем копию студента для сравнения до и после дистилляции
+    student_model_before = copy.deepcopy(student_model)
+    
     # Выводим информацию о моделях
     teacher_params = sum(p.numel() for p in teacher_model.parameters())
     student_params = sum(p.numel() for p in student_model.parameters())
@@ -345,11 +671,22 @@ def distill_gpt2_wikitext(args):
         dataset = Subset(dataset, indices)
         print(f"Используется подмножество данных размером {args.sample_size}")
     
-    # Создаем загрузчик данных
+    # Создаем загрузчик данных для обучения
+    train_size = int(0.9 * len(dataset))
+    val_size = len(dataset) - train_size
+    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+    
     train_loader = DataLoader(
-        dataset, 
+        train_dataset, 
         batch_size=args.batch_size, 
         shuffle=True,
+        collate_fn=collate_batch
+    )
+    
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=args.batch_size, 
+        shuffle=False,
         collate_fn=collate_batch
     )
     
@@ -385,13 +722,23 @@ def distill_gpt2_wikitext(args):
     
     wrapped_teacher = WrappedModel(teacher_model)
     wrapped_student = WrappedModel(student_model)
+    wrapped_student_before = WrappedModel(student_model_before)
     
-    # Создаем директорию для чекпоинтов
-    checkpoint_dir = os.path.join(args.output_dir, 'checkpoints')
+    # Создаем директорию для чекпоинтов внутри уникальной директории дистилляции
+    checkpoint_dir = os.path.join(distillation_dir, 'checkpoints')
     os.makedirs(checkpoint_dir, exist_ok=True)
     
+    # Проводим валидацию до дистилляции, если не указан флаг пропуска валидации
+    before_metrics = {}
+    if not args.skip_validation:
+        print("\nПроведение валидации до дистилляции...")
+        # Явно перемещаем модели на устройство перед валидацией
+        wrapped_student_before = wrapped_student_before.to(device)
+        wrapped_teacher = wrapped_teacher.to(device)
+        before_metrics = validate_student_improvement(wrapped_student_before, wrapped_teacher, val_loader, device)
+    
     # Функция для отображения прогресса дистилляции
-    def display_distillation_progress(distiller, student_model, teacher_model, train_loader, optimizer, num_epochs, student_loss_fn, checkpoint_dir, checkpoint_interval):
+    def display_distillation_progress(distiller, student_model, teacher_model, train_loader, val_loader, optimizer, num_epochs, student_loss_fn, checkpoint_dir, checkpoint_interval, save_best_model=False):
         """Запускает процесс дистилляции с отображением прогресса в консоли
         
         Args:
@@ -399,11 +746,13 @@ def distill_gpt2_wikitext(args):
             student_model: Модель студента
             teacher_model: Модель учителя
             train_loader: Загрузчик данных для обучения
+            val_loader: Загрузчик данных для валидации
             optimizer: Оптимизатор
             num_epochs: Количество эпох
             student_loss_fn: Функция потерь для студента
             checkpoint_dir: Директория для сохранения чекпоинтов
             checkpoint_interval: Интервал сохранения чекпоинтов (в эпохах)
+            save_best_model: Сохранять лучшую модель по валидационной выборке (по умолчанию отключено)
         
         Returns:
             Обученная модель студента
@@ -421,6 +770,11 @@ def distill_gpt2_wikitext(args):
         # Создаем прогресс-бар для эпох
         epoch_bar = trange(num_epochs, desc="Эпохи", position=0)
         
+        # Инициализируем переменные для отслеживания лучшей модели
+        best_val_loss = float('inf')
+        best_model_state = None
+        best_epoch = -1
+        
         # Для каждой эпохи
         for epoch in epoch_bar:
             # Создаем прогресс-бар для батчей
@@ -435,6 +789,10 @@ def distill_gpt2_wikitext(args):
                 # Перемещаем данные на устройство
                 inputs = inputs.to(device)
                 targets = targets.to(device)
+                
+                # Явно перемещаем модели на устройство перед каждым батчем
+                teacher_model = teacher_model.to(device)
+                student_model = student_model.to(device)
                 
                 # Получаем предсказания учителя (без градиентов)
                 with torch.no_grad():
@@ -501,6 +859,60 @@ def distill_gpt2_wikitext(args):
                 checkpoint_path = os.path.join(checkpoint_dir, f'student_checkpoint_epoch_{epoch+1}.pt')
                 distiller.save_student_model(checkpoint_path)
                 print(f"\nСохранен чекпоинт после эпохи {epoch+1} в {checkpoint_path}")
+            
+            # Проводим валидацию, если включено сохранение лучшей модели
+            if save_best_model and val_loader is not None:
+                print(f"\nПроведение валидации после эпохи {epoch+1}...")
+                student_model.eval()
+                val_loss = 0.0
+                val_batches = 0
+                
+                with torch.no_grad():
+                    for val_inputs, val_targets in val_loader:
+                        val_inputs = val_inputs.to(device)
+                        val_targets = val_targets.to(device)
+                        
+                        # Явно перемещаем модель на устройство перед валидацией
+                        student_model = student_model.to(device)
+                        
+                        val_logits = student_model(val_inputs)
+                        
+                        # Убедимся, что логиты и цели на одном устройстве
+                        if val_logits.device != val_targets.device:
+                            val_logits = val_logits.to(val_targets.device)
+                            
+                        val_batch_loss = student_loss_fn(val_logits, val_targets).item()
+                        val_loss += val_batch_loss
+                        val_batches += 1
+                
+                avg_val_loss = val_loss / val_batches if val_batches > 0 else float('inf')
+                print(f"Средняя валидационная потеря: {avg_val_loss:.4f}")
+                
+                # Сохраняем лучшую модель
+                if avg_val_loss < best_val_loss:
+                    best_val_loss = avg_val_loss
+                    best_model_state = {key: value.cpu().clone() for key, value in student_model.state_dict().items()}
+                    best_epoch = epoch + 1
+                    
+                    if checkpoint_dir:
+                        best_model_path = os.path.join(checkpoint_dir, 'best_student_model.pt')
+                        torch.save({
+                            'model_state_dict': best_model_state,
+                            'epoch': best_epoch,
+                            'val_loss': best_val_loss,
+                            'config': distiller.config,
+                            'metrics': distiller.get_metrics()
+                        }, best_model_path)
+                        print(f"Сохранена лучшая модель (эпоха {best_epoch}, потеря {best_val_loss:.4f}) в {best_model_path}")
+        
+        # Загружаем лучшую модель, если она была сохранена
+        if save_best_model and best_model_state is not None:
+            print(f"\nЗагрузка лучшей модели (эпоха {best_epoch}, потеря {best_val_loss:.4f})")
+            student_model.load_state_dict({key: value.to(device) for key, value in best_model_state.items()})
+            print("Лучшая модель успешно загружена.")
+        else:
+            print("\nИспользуется модель после последней эпохи.")
+
         
         # Закрываем прогресс-бары
         epoch_bar.close()
@@ -514,11 +926,13 @@ def distill_gpt2_wikitext(args):
         wrapped_student,
         wrapped_teacher,
         train_loader,
+        val_loader,
         optimizer,
         num_epochs=args.epochs,
         student_loss_fn=language_model_loss,
         checkpoint_dir=checkpoint_dir,
-        checkpoint_interval=args.checkpoint_interval
+        checkpoint_interval=args.checkpoint_interval,
+        save_best_model=args.save_best_model
     )
 
     # Получаем и выводим метрики
@@ -530,21 +944,18 @@ def distill_gpt2_wikitext(args):
     print(f"Время выполнения: {metrics['metrics']['elapsed_time']:.2f} секунд")
     print(f"Коэффициент сжатия: {metrics['config']['compression_ratio']:.2f}x")
     
-    # Строим и сохраняем графики
-    plot_losses(distiller)
-    plot_perplexity(distiller)
+    # Строим и сохраняем графики в уникальную директорию дистилляции
+    plot_losses(distiller, distillation_dir)
+    plot_perplexity(distiller, distillation_dir)
     
-    # Создаем директорию для вывода, если она не существует
-    os.makedirs(args.output_dir, exist_ok=True)
-    
-    # Сохраняем модель студента
-    student_path = os.path.join(args.output_dir, 'student_model_wikitext.pt')
+    # Сохраняем модель студента в уникальную директорию дистилляции
+    student_path = os.path.join(distillation_dir, 'student_model_wikitext.pt')
     distiller.save_student_model(student_path)
     print(f"Модель студента сохранена в {student_path}")
     
     # Сохраняем метрики в JSON, если указано
     if args.save_metrics:
-        metrics_path = os.path.join(args.output_dir, 'metrics_wikitext.json')
+        metrics_path = os.path.join(distillation_dir, 'metrics_wikitext.json')
         with open(metrics_path, 'w') as f:
             # Преобразуем метрики в сериализуемый формат
             serializable_metrics = {
@@ -579,7 +990,7 @@ def distill_gpt2_wikitext(args):
         plt.tight_layout()
         
         # Сохраняем график с высоким разрешением
-        plot_path = os.path.join(args.output_dir, 'total_loss_plot.png')
+        plot_path = os.path.join(distillation_dir, 'total_loss_plot.png')
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         print(f"График общих потерь сохранен в {plot_path}")
         plt.close()
@@ -609,7 +1020,7 @@ def distill_gpt2_wikitext(args):
         plt.tight_layout()
         
         # Сохраняем график с высоким разрешением
-        plot_path = os.path.join(args.output_dir, 'teacher_student_loss_plot.png')
+        plot_path = os.path.join(distillation_dir, 'teacher_student_loss_plot.png')
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         print(f"График сравнения потерь учителя и студента сохранен в {plot_path}")
         plt.close()
@@ -628,7 +1039,7 @@ def distill_gpt2_wikitext(args):
         plt.tight_layout()
         
         # Сохраняем график с высоким разрешением
-        plot_path = os.path.join(args.output_dir, 'all_losses_plot.png')
+        plot_path = os.path.join(distillation_dir, 'all_losses_plot.png')
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         print(f"График всех потерь сохранен в {plot_path}")
         plt.close()
@@ -661,10 +1072,51 @@ def distill_gpt2_wikitext(args):
         plt.tight_layout()
         
         # Сохраняем график с высоким разрешением
-        plot_path = os.path.join(args.output_dir, 'perplexity_plot.png')
+        plot_path = os.path.join(distillation_dir, 'perplexity_plot.png')
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         print(f"График перплексии сохранен в {plot_path}")
         plt.close()
+    
+    # Проводим валидацию после дистилляции, если не указан флаг пропуска валидации
+    after_metrics = {}
+    if not args.skip_validation:
+        print("\nПроведение валидации после дистилляции...")
+        # Явно перемещаем модели на устройство перед валидацией
+        wrapped_student = wrapped_student.to(device)
+        wrapped_teacher = wrapped_teacher.to(device)
+        after_metrics = validate_student_improvement(wrapped_student, wrapped_teacher, val_loader, device)
+        
+        # Выводим сравнение результатов до и после дистилляции
+        print("\nСравнение результатов до и после дистилляции:")
+        print(f"Потеря студента до: {before_metrics['avg_student_loss']:.4f}, после: {after_metrics['avg_student_loss']:.4f}")
+        print(f"Перплексия студента до: {before_metrics['student_perplexity']:.4f}, после: {after_metrics['student_perplexity']:.4f}")
+        print(f"Потеря учителя: {after_metrics['avg_teacher_loss']:.4f}, перплексия: {after_metrics['teacher_perplexity']:.4f}")
+        
+        # Определяем, улучшилась ли модель
+        if after_metrics['avg_student_loss'] < before_metrics['avg_student_loss']:
+            improvement = (before_metrics['avg_student_loss'] - after_metrics['avg_student_loss']) / before_metrics['avg_student_loss'] * 100
+            print(f"\nМодель студента улучшилась на {improvement:.2f}% по потере")
+        else:
+            print("\nМодель студента не улучшилась по потере")
+    
+    # Анализируем изменения параметров студента
+    parameter_changes = analyze_student_parameters(student_model_before, student_model)
+    
+    # Создаем сравнительную таблицу, если указан соответствующий флаг
+    if args.create_comparison_table:
+        comparison_data = {
+            'before': before_metrics,
+            'after': after_metrics,
+            'parameter_changes': parameter_changes,
+            'teacher_params': teacher_params,
+            'student_params': student_params,
+            'compression_ratio': compression_ratio,
+            'avg_student_loss': metrics['metrics']['avg_student_loss'],
+            'avg_total_loss': metrics['metrics']['avg_total_loss'],
+            'avg_distillation_loss': metrics['metrics']['avg_distillation_loss'],
+            'elapsed_time': metrics['metrics']['elapsed_time']
+        }
+        create_comparison_table(comparison_data, distillation_dir)
     
     return trained_student, metrics
 
