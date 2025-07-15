@@ -25,23 +25,6 @@ class TaskType(Enum):
     GENERATION = "generation"
     VISION = "vision"
 
-# Определение поддерживаемых классов моделей и процессоров для проверки типов
-MODEL_CLASSES = {
-    "gpt2": (GPT2LMHeadModel, AutoTokenizer),
-    "llama3_8b": (AutoModelForCausalLM, AutoTokenizer),
-    "mistral_7b": (AutoModelForCausalLM, AutoTokenizer),
-    "owlv2": (OwlViTForObjectDetection, OwlViTProcessor),
-    "qwen3_4b": (AutoModelForCausalLM, AutoTokenizer)
-}
-
-# Конфигурации моделей (восстановлено для документации и обратной совместимости)
-MODEL_CONFIGS = {
-    "gpt2": "openai-community/gpt2",
-    "llama3_8b": "meta-llama/Llama-3-8b",
-    "mistral_7b": "mistralai/Mixtral-7B-v0.1",
-    "owlv2": "google/owlv2-large-patch14-ensemble",
-    "qwen3_4b": "Qwen/Qwen3-4B"
-}
 
 # Метрики для задач
 TASK_METRICS = {
@@ -104,14 +87,6 @@ def load_model(model: Any, processor: Any, device: str = "cuda") -> Tuple[Any, A
             model = model_class.from_pretrained(MODEL_CONFIGS[model]).to(device)
             processor = processor_class.from_pretrained(MODEL_CONFIGS[model])
     """
-    # Проверка типов модели и процессора
-    valid_model_types = tuple(cls[0] for cls in MODEL_CLASSES.values())
-    valid_processor_types = tuple(cls[1] for cls in MODEL_CLASSES.values())
-
-    if not isinstance(model, valid_model_types):
-        raise ValueError(f"Модель должна быть одним из типов: {valid_model_types}")
-    if not isinstance(processor, valid_processor_types):
-        raise ValueError(f"Процессор должен быть одним из типов: {valid_processor_types}")
 
     # Проверка поддержки perplexity для задач GENERATION и TRANSLATION
     if "perplexity" in TASK_METRICS.get(TaskType.GENERATION, []) or "perplexity" in TASK_METRICS.get(TaskType.TRANSLATION, []):
