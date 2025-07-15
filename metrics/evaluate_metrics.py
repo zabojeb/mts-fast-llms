@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Импорт функций метрик (предполагается, что они определены в metric_functions)
-from metric_functions import *
+from .metric_functions import *
 
 # Типы задач
 class TaskType(Enum):
