@@ -1,5 +1,5 @@
 import torch
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Any
 
 def compute_clip_score_vision(
     *,
