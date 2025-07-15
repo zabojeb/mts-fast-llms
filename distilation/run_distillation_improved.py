@@ -1,6 +1,8 @@
 import os
 import torch
 from test_distillation_wikitext import distill_gpt2_wikitext
+import torch.nn as nn
+from transformers import GPT2Config, GPT2LMHeadModel
 
 # ============= НАСТРОЙКИ ДИСТИЛЛЯЦИИ =============
 # Вы можете изменить эти параметры в соответствии с вашими потребностями
@@ -11,8 +13,8 @@ from test_distillation_wikitext import distill_gpt2_wikitext
 TEACHER_MODEL = 'gpt2-xl'
 
 # Модель студента (меньшая модель, которую мы обучаем)
-# Варианты: 'gpt2', 'gpt2-medium', 'Qwen/Qwen-1_8B-Chat' и т.д.
-STUDENT_MODEL = 'gpt2'
+# Для не предобученной модели установим значение 'random-gpt2'
+STUDENT_MODEL = 'random-gpt2'
 
 # Путь к локальной модели учителя (если None, будет использована модель из Hugging Face)
 TEACHER_MODEL_PATH = None
@@ -22,7 +24,7 @@ STUDENT_MODEL_PATH = None
 
 # === ДАННЫЕ ===
 # Датасет для обучения
-# Варианты: 'wikitext' (стандартный), 'pokemon' (пример пользовательского), 
+# Варианты: 'wikitext' (стандартный), 'pokemon' (пример пользовательского),
 # или путь к вашему собственному файлу
 DATASET = 'wikitext'
 
@@ -32,37 +34,47 @@ DATASET_PATH = None
 
 # Размер выборки из датасета (для ускорения обучения)
 # Установите 0 для использования всего датасета
-SAMPLE_SIZE = 1000
+# Увеличиваем размер выборки для лучшего обучения
+SAMPLE_SIZE = 5000
 
 # Максимальная длина последовательности
 MAX_LENGTH = 256
 
 # === ПАРАМЕТРЫ ДИСТИЛЛЯЦИИ ===
 # Температура для дистилляции (влияет на "мягкость" распределения вероятностей)
-# Более высокие значения делают распределение более плоским
-TEMPERATURE = 2.0
+# Снижаем температуру для уменьшения риска переобучения
+TEMPERATURE = 1.5
 
 # Вес для soft targets (KL-дивергенция между распределениями учителя и студента)
-# Чем выше значение, тем больше студент имитирует распределение учителя
-ALPHA = 0.7
+# Уменьшаем alpha для снижения влияния учителя
+ALPHA = 0.5
 
 # Вес для hard targets (обычная функция потерь на истинных метках)
-# Чем выше значение, тем больше студент фокусируется на правильных ответах
-BETA = 0.3
+# Увеличиваем beta для лучшего обучения на реальных данных
+BETA = 0.5
 
 # === ПАРАМЕТРЫ ОБУЧЕНИЯ ===
 # Количество эпох обучения
-EPOCHS = 2
+# Увеличиваем количество эпох для лучшего обучения
+EPOCHS = 5
 
 # Размер батча
 BATCH_SIZE = 8
 
 # Скорость обучения
-LEARNING_RATE = 5e-5
+# Уменьшаем скорость обучения для более стабильного обучения
+LEARNING_RATE = 1e-5
 
 # Не использовать CUDA (GPU)
 # Установите True, если хотите использовать только CPU
 NO_CUDA = False
+
+# === РЕГУЛЯРИЗАЦИЯ ===
+# Вес L2-регуляризации (weight decay)
+WEIGHT_DECAY = 0.01
+
+# Вероятность dropout для слоев модели
+DROPOUT_PROB = 0.1
 
 # === СОХРАНЕНИЕ И ЛОГИРОВАНИЕ ===
 # Директория для сохранения результатов
@@ -73,7 +85,7 @@ OUTPUT_DIR = './output'
 FOLDER_NAME = None
 
 # Интервал сохранения чекпоинтов (в эпохах)
-CHECKPOINT_INTERVAL = 50
+CHECKPOINT_INTERVAL = 1
 
 # Сохранить метрики в JSON
 SAVE_METRICS = True
@@ -82,9 +94,10 @@ SAVE_METRICS = True
 SAVE_PLOT = True
 
 # Создать сравнительную таблицу до и после дистилляции
-CREATE_COMPARISON_TABLE = False
+CREATE_COMPARISON_TABLE = True
 
 # Сохранять лучшую модель по валидационной выборке
+# Включаем для реализации early stopping
 SAVE_BEST_MODEL = True
 
 # Пропустить валидацию улучшения студента
@@ -124,6 +137,8 @@ DISTILLATION_CONFIG = {
         'batch_size': BATCH_SIZE,
         'learning_rate': LEARNING_RATE,
         'no_cuda': NO_CUDA,
+        'weight_decay': WEIGHT_DECAY,
+        'dropout_prob': DROPOUT_PROB,
     },
     'output': {
         'output_dir': OUTPUT_DIR,
@@ -143,8 +158,83 @@ DISTILLATION_CONFIG = {
 }
 
 
+def create_random_gpt2_model(config_name='gpt2', dropout_prob=0.1):
+    """
+    Создает модель GPT-2 с случайной инициализацией весов (не предобученную)
+    
+    Args:
+        config_name: Имя конфигурации модели ('gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl')
+        dropout_prob: Вероятность dropout для слоев модели
+    
+    Returns:
+        Модель GPT-2 со случайно инициализированными весами
+    """
+    # Загружаем конфигурацию модели
+    if config_name == 'gpt2':
+        config = GPT2Config(
+            vocab_size=50257,
+            n_positions=1024,
+            n_ctx=1024,
+            n_embd=768,
+            n_layer=12,
+            n_head=12,
+            dropout=dropout_prob
+        )
+    elif config_name == 'gpt2-medium':
+        config = GPT2Config(
+            vocab_size=50257,
+            n_positions=1024,
+            n_ctx=1024,
+            n_embd=1024,
+            n_layer=24,
+            n_head=16,
+            dropout=dropout_prob
+        )
+    elif config_name == 'gpt2-large':
+        config = GPT2Config(
+            vocab_size=50257,
+            n_positions=1024,
+            n_ctx=1024,
+            n_embd=1280,
+            n_layer=36,
+            n_head=20,
+            dropout=dropout_prob
+        )
+    elif config_name == 'gpt2-xl':
+        config = GPT2Config(
+            vocab_size=50257,
+            n_positions=1024,
+            n_ctx=1024,
+            n_embd=1600,
+            n_layer=48,
+            n_head=25,
+            dropout=dropout_prob
+        )
+    else:
+        # По умолчанию используем конфигурацию gpt2
+        config = GPT2Config(dropout=dropout_prob)
+    
+    # Создаем модель с случайной инициализацией весов
+    model = GPT2LMHeadModel(config)
+    
+    # Инициализируем веса модели
+    def _init_weights(module):
+        if isinstance(module, (nn.Linear, nn.Embedding)):
+            module.weight.data.normal_(mean=0.0, std=0.02)
+            if isinstance(module, nn.Linear) and module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+    
+    model.apply(_init_weights)
+    
+    return model
+
+
 def run_distillation(config=None):
-    """Запускает процесс дистилляции с указанными параметрами
+    """
+    Запускает процесс дистилляции с указанными параметрами
     
     Args:
         config: Словарь с конфигурацией дистилляции. Если None, используются глобальные параметры.
@@ -157,6 +247,8 @@ def run_distillation(config=None):
         # Используем глобальные параметры
         teacher_model = TEACHER_MODEL
         student_model = STUDENT_MODEL
+        teacher_model_path = TEACHER_MODEL_PATH
+        student_model_path = STUDENT_MODEL_PATH
         dataset = DATASET
         dataset_path = DATASET_PATH
         temperature = TEMPERATURE
@@ -179,10 +271,14 @@ def run_distillation(config=None):
         create_comparison_table = CREATE_COMPARISON_TABLE
         save_best_model = SAVE_BEST_MODEL
         folder_name = FOLDER_NAME
+        weight_decay = WEIGHT_DECAY
+        dropout_prob = DROPOUT_PROB
     else:
         # Используем переданную конфигурацию
         teacher_model = config['models']['teacher_model_name']
         student_model = config['models']['student_model_name']
+        teacher_model_path = config['models'].get('teacher_model_path', None)
+        student_model_path = config['models'].get('student_model_path', None)
         dataset = config['dataset']['dataset_name']
         dataset_path = config['dataset']['dataset_path']
         temperature = config['distillation']['temperature']
@@ -205,12 +301,16 @@ def run_distillation(config=None):
         create_comparison_table = config['output']['create_comparison_table']
         save_best_model = config['output']['save_best_model']
         folder_name = config['output']['folder_name']
+        weight_decay = config['training']['weight_decay']
+        dropout_prob = config['training']['dropout_prob']
     
     # Создаем объект args, имитирующий аргументы командной строки
     class Args:
         def __init__(self):
             self.teacher_model = teacher_model
             self.student_model = student_model
+            self.teacher_model_path = teacher_model_path
+            self.student_model_path = student_model_path
             self.dataset = dataset
             self.dataset_path = dataset_path
             self.temperature = temperature
@@ -233,6 +333,10 @@ def run_distillation(config=None):
             self.create_comparison_table = create_comparison_table
             self.save_best_model = save_best_model
             self.folder_name = folder_name
+            self.weight_decay = weight_decay
+            self.dropout_prob = dropout_prob
+            self.random_init = student_model.startswith('random-')
+            self.random_model_size = student_model.replace('random-', '') if student_model.startswith('random-') else 'gpt2'
 
     args = Args()
 

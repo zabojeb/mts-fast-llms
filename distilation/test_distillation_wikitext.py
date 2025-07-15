@@ -57,8 +57,10 @@ def create_distillation_dir(base_dir, folder_name=None):
 # Настройка аргументов командной строки
 def parse_args():
     parser = argparse.ArgumentParser(description='Тестирование модуля дистилляции знаний на WikiText')
-    parser.add_argument('--teacher_model', type=str, default='gpt2-medium', help='Модель учителя')
-    parser.add_argument('--student_model', type=str, default='gpt2', help='Модель студента')
+    parser.add_argument('--teacher_model', type=str, default='gpt2-medium', help='Модель учителя (имя модели из Hugging Face или путь к локальной модели)')
+    parser.add_argument('--student_model', type=str, default='gpt2', help='Модель студента (имя модели из Hugging Face или путь к локальной модели)')
+    parser.add_argument('--teacher_model_path', type=str, help='Путь к локальной модели учителя (если не указано, будет использована модель из Hugging Face)')
+    parser.add_argument('--student_model_path', type=str, help='Путь к локальной модели студента (если не указано, будет использована модель из Hugging Face)')
     parser.add_argument('--dataset', type=str, default='wikitext', help='Датасет для обучения (wikitext, pokemon или путь к файлу)')
     parser.add_argument('-r', '--dataset_path', type=str, help='Путь к пользовательскому датасету')
     parser.add_argument('--temperature', type=float, default=4.0, help='Температура для дистилляции')
@@ -641,14 +643,44 @@ def distill_gpt2_wikitext(args):
     # Загружаем токенизатор и модели
     if is_qwen:
         print("Загрузка моделей Qwen...")
+        # Загружаем токенизатор из модели учителя
         tokenizer = AutoTokenizer.from_pretrained(args.teacher_model)
-        teacher_model = AutoModelForCausalLM.from_pretrained(args.teacher_model)
-        student_model = AutoModelForCausalLM.from_pretrained(args.student_model)
+        
+        # Загружаем модель учителя
+        if hasattr(args, 'teacher_model_path') and args.teacher_model_path:
+            print(f"Загрузка модели учителя из локального пути: {args.teacher_model_path}")
+            teacher_model = AutoModelForCausalLM.from_pretrained(args.teacher_model_path)
+        else:
+            print(f"Загрузка модели учителя из Hugging Face: {args.teacher_model}")
+            teacher_model = AutoModelForCausalLM.from_pretrained(args.teacher_model)
+        
+        # Загружаем модель студента
+        if hasattr(args, 'student_model_path') and args.student_model_path:
+            print(f"Загрузка модели студента из локального пути: {args.student_model_path}")
+            student_model = AutoModelForCausalLM.from_pretrained(args.student_model_path)
+        else:
+            print(f"Загрузка модели студента из Hugging Face: {args.student_model}")
+            student_model = AutoModelForCausalLM.from_pretrained(args.student_model)
     else:
         print("Загрузка моделей GPT-2...")
+        # Загружаем токенизатор из модели учителя
         tokenizer = GPT2Tokenizer.from_pretrained(args.teacher_model)
-        teacher_model = GPT2LMHeadModel.from_pretrained(args.teacher_model)
-        student_model = GPT2LMHeadModel.from_pretrained(args.student_model)
+        
+        # Загружаем модель учителя
+        if hasattr(args, 'teacher_model_path') and args.teacher_model_path:
+            print(f"Загрузка модели учителя из локального пути: {args.teacher_model_path}")
+            teacher_model = GPT2LMHeadModel.from_pretrained(args.teacher_model_path)
+        else:
+            print(f"Загрузка модели учителя из Hugging Face: {args.teacher_model}")
+            teacher_model = GPT2LMHeadModel.from_pretrained(args.teacher_model)
+        
+        # Загружаем модель студента
+        if hasattr(args, 'student_model_path') and args.student_model_path:
+            print(f"Загрузка модели студента из локального пути: {args.student_model_path}")
+            student_model = GPT2LMHeadModel.from_pretrained(args.student_model_path)
+        else:
+            print(f"Загрузка модели студента из Hugging Face: {args.student_model}")
+            student_model = GPT2LMHeadModel.from_pretrained(args.student_model)
     
     # Создаем копию студента для сравнения до и после дистилляции
     student_model_before = copy.deepcopy(student_model)
