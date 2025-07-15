@@ -58,7 +58,7 @@ results = metrics_evaluate(
         "text": "text",
         "reference": "references",
         "generate_kwargs": {
-            "max_length": 100,  # Увеличен для длинных переводов
+            "max_length": 300,  # Увеличен для длинных переводов
             "num_beams": 5,
             "do_sample": False,
             "early_stopping": True

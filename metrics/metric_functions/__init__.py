@@ -8,7 +8,7 @@ from .rouge import compute_rouge
 from .SPICE import compute_spice
 from .CIDEr import compute_cider
 from .CLIPScore import compute_clip_score
-from .FLOPs import compute_flops
+from .FLOPs import compute_flops, compute_flops_in_train
 from .BERTScore import compute_bert_score
 from .METEOR import compute_meteor
 from .Latency import compute_latency
