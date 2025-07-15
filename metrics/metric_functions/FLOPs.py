@@ -1,28 +1,10 @@
 from fvcore.nn import FlopCountAnalysis
 import torch
 from typing import Any, Optional
+import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)
-
-def compute_flops(
-        *,
-        flops: Any,
-        **kwargs
-) -> float:
-    """Возвращает предвычисленное значение FLOPs.
-
-    Args:
-        flops: Предвычисленное значение FLOPs (float).
-        **kwargs: Дополнительные параметры (игнорируются).
-
-    Returns:
-        float: Значение FLOPs или inf, если значение некорректно.
-    """
-    if not isinstance(flops, (int, float)) or not np.isfinite(flops):
-        logger.warning("FLOPs: Некорректное предвычисленное значение")
-        return float("inf")
-    return float(flops)
 
 def compute_flops_in_train(
         model: torch.nn.Module,
@@ -32,19 +14,7 @@ def compute_flops_in_train(
         task_name: str = "",
         device: str = "cuda"
 ) -> float:
-    """Вычисляет FLOPs для обработки входных данных внутри train_func.
-
-    Args:
-        model: Модель для вычисления FLOPs.
-        processor: Токенизатор или процессор для подготовки входных данных.
-        raw_text: Входной текст (List[str]).
-        images: Входные изображения (torch.Tensor, для визуальных задач).
-        task_name: Имя задачи (например, 'vision', 'generation').
-        device: Устройство ('cuda' или 'cpu').
-
-    Returns:
-        float: Значение FLOPs или inf при ошибке.
-    """
+    """Вычисляет FLOPs для обработки входных данных внутри train_func."""
     try:
         if task_name == "vision":
             if images is None or processor is None:

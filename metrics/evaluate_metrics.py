@@ -124,10 +124,11 @@ def train_func(
     label_field = field_mapping.get("label", "label") if task_type == TaskType.CLASSIFICATION else None
     reference_field = field_mapping.get("reference", "references") if task_type in [TaskType.TRANSLATION, TaskType.GENERATION, TaskType.VISION] else None
 
+    # Проверка наличия полей в датасете
     text = dataset[text_field] if text_field in dataset.column_names else None
-    images = dataset[image_field] if image_field in dataset.column_names and task_type == TaskType.VISION else None
-    labels = dataset[label_field] if label_field in dataset.column_names and task_type == TaskType.CLASSIFICATION else None
-    references = dataset[reference_field] if reference_field in dataset.column_names else None
+    images = dataset[image_field] if image_field and image_field in dataset.column_names and task_type == TaskType.VISION else None
+    labels = dataset[label_field] if label_field and label_field in dataset.column_names and task_type == TaskType.CLASSIFICATION else None
+    references = dataset[reference_field] if reference_field and reference_field in dataset.column_names else None
 
     # Минимальная валидация входных данных
     if task_type == TaskType.CLASSIFICATION and (not text or not labels):

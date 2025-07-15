@@ -51,7 +51,6 @@ def compute_rouge(
             rouge_type: sum(scores) / len(scores) if scores else float("inf")
             for rouge_type, scores in aggregated.items()
         }
-
     except Exception as e:
         logger.warning(f"ROUGE: Ошибка при вычислении: {str(e)}")
         return {rouge_type: float("inf") for rouge_type in rouge_types}

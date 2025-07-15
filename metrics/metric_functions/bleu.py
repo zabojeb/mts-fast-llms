@@ -32,7 +32,6 @@ def compute_bleu(
 
         score = corpus_bleu(formatted_references, formatted_predictions)
         return score if np.isfinite(score) else float("inf")
-
     except Exception as e:
         logger.warning(f"Ошибка в compute_bleu: {str(e)}")
         return float("inf")
