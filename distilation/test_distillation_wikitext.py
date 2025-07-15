@@ -83,6 +83,7 @@ def parse_args():
     parser.add_argument('--create_comparison_table', action='store_true', help='Создать сравнительную таблицу до и после дистилляции')
     parser.add_argument('--save_best_model', action='store_true', help='Сохранять лучшую модель по валидационной выборке (по умолчанию отключено)')
     parser.add_argument('--folder_name', type=str, help='Название папки для сохранения результатов дистилляции (если не указано, будет создана папка с временной меткой)')
+    parser.add_argument('--use_auto_model', action='store_true', help='Использовать AutoModel для загрузки моделей (рекомендуется для не-GPT2 моделей)')
     return parser.parse_args()
 
 # Класс для подготовки данных WikiText
@@ -637,50 +638,247 @@ def distill_gpt2_wikitext(args):
     device = "cpu" if args.no_cuda or not torch.cuda.is_available() else "cuda"
     print(f"Используется устройство: {device}")
     
+    # Определяем, использовать ли AutoModel
+    use_auto_model = hasattr(args, 'use_auto_model') and args.use_auto_model
+    
+    # Если модель не GPT-2 или это Qwen, принудительно используем AutoModel
+    if not ('gpt2' in args.teacher_model.lower() and 'gpt2' in args.student_model.lower()) or \
+       'qwen' in args.teacher_model.lower() or 'qwen' in args.student_model.lower() or \
+       'llama' in args.teacher_model.lower() or 'llama' in args.student_model.lower() or \
+       'mistral' in args.teacher_model.lower() or 'mistral' in args.student_model.lower() or \
+       'phi' in args.teacher_model.lower() or 'phi' in args.student_model.lower():
+        use_auto_model = True
+    
     # Проверяем, является ли модель Qwen
     is_qwen = 'qwen' in args.teacher_model.lower() or 'qwen' in args.student_model.lower()
     
+    # Для обратной совместимости проверяем, является ли модель GPT-2
+    is_gpt2 = ('gpt2' in args.teacher_model.lower() and 'gpt2' in args.student_model.lower()) and \
+              not (args.teacher_model.startswith('random-') or args.student_model.startswith('random-'))
+    
     # Загружаем токенизатор и модели
-    if is_qwen:
-        print("Загрузка моделей Qwen...")
+    if is_gpt2 and not use_auto_model:
+        print("Загрузка моделей GPT-2 (специфичный класс)...")
         # Загружаем токенизатор из модели учителя
-        tokenizer = AutoTokenizer.from_pretrained(args.teacher_model)
+        try:
+            tokenizer = GPT2Tokenizer.from_pretrained(args.teacher_model)
+        except Exception as e:
+            print(f"Ошибка при загрузке токенизатора GPT-2: {e}")
+            print("Попытка загрузки токенизатора с использованием AutoTokenizer...")
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(args.teacher_model)
+            except Exception as e2:
+                print(f"Ошибка при загрузке токенизатора с AutoTokenizer: {e2}")
+                print("Использование стандартного токенизатора GPT-2...")
+                tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
         
         # Загружаем модель учителя
-        if hasattr(args, 'teacher_model_path') and args.teacher_model_path:
-            print(f"Загрузка модели учителя из локального пути: {args.teacher_model_path}")
-            teacher_model = AutoModelForCausalLM.from_pretrained(args.teacher_model_path)
-        else:
-            print(f"Загрузка модели учителя из Hugging Face: {args.teacher_model}")
-            teacher_model = AutoModelForCausalLM.from_pretrained(args.teacher_model)
+        try:
+            if hasattr(args, 'teacher_model_path') and args.teacher_model_path:
+                print(f"Загрузка модели учителя из локального пути: {args.teacher_model_path}")
+                teacher_model = GPT2LMHeadModel.from_pretrained(args.teacher_model_path, trust_remote_code=True)
+            else:
+                print(f"Загрузка модели учителя из Hugging Face: {args.teacher_model}")
+                teacher_model = GPT2LMHeadModel.from_pretrained(args.teacher_model, trust_remote_code=True)
+        except Exception as e:
+            print(f"Ошибка при загрузке модели учителя как GPT2LMHeadModel: {e}")
+            print("Попытка загрузки модели учителя с использованием AutoModelForCausalLM...")
+            if hasattr(args, 'teacher_model_path') and args.teacher_model_path:
+                teacher_model = AutoModelForCausalLM.from_pretrained(args.teacher_model_path, trust_remote_code=True)
+            else:
+                teacher_model = AutoModelForCausalLM.from_pretrained(args.teacher_model, trust_remote_code=True)
         
         # Загружаем модель студента
-        if hasattr(args, 'student_model_path') and args.student_model_path:
-            print(f"Загрузка модели студента из локального пути: {args.student_model_path}")
-            student_model = AutoModelForCausalLM.from_pretrained(args.student_model_path)
-        else:
-            print(f"Загрузка модели студента из Hugging Face: {args.student_model}")
-            student_model = AutoModelForCausalLM.from_pretrained(args.student_model)
+        try:
+            if hasattr(args, 'student_model_path') and args.student_model_path:
+                print(f"Загрузка модели студента из локального пути: {args.student_model_path}")
+                student_model = GPT2LMHeadModel.from_pretrained(args.student_model_path, trust_remote_code=True)
+            else:
+                print(f"Загрузка модели студента из Hugging Face: {args.student_model}")
+                student_model = GPT2LMHeadModel.from_pretrained(args.student_model, trust_remote_code=True)
+        except Exception as e:
+            print(f"Ошибка при загрузке модели студента как GPT2LMHeadModel: {e}")
+            print("Попытка загрузки модели студента с использованием AutoModelForCausalLM...")
+            if hasattr(args, 'student_model_path') and args.student_model_path:
+                student_model = AutoModelForCausalLM.from_pretrained(args.student_model_path, trust_remote_code=True)
+            else:
+                student_model = AutoModelForCausalLM.from_pretrained(args.student_model, trust_remote_code=True)
     else:
-        print("Загрузка моделей GPT-2...")
+        print("Загрузка моделей с использованием AutoModel...")
         # Загружаем токенизатор из модели учителя
-        tokenizer = GPT2Tokenizer.from_pretrained(args.teacher_model)
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(args.teacher_model)
+        except Exception as e:
+            print(f"Ошибка при загрузке токенизатора учителя: {e}")
+            print("Попытка загрузки токенизатора GPT-2...")
+            try:
+                tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+            except Exception as e2:
+                print(f"Ошибка при загрузке токенизатора GPT-2: {e2}")
+                print("Попытка загрузки токенизатора из модели студента...")
+                try:
+                    tokenizer = AutoTokenizer.from_pretrained(args.student_model)
+                except Exception as e3:
+                    print(f"Все попытки загрузки токенизатора не удались. Последняя ошибка: {e3}")
+                    raise ValueError("Не удалось загрузить токенизатор для моделей.")
         
         # Загружаем модель учителя
-        if hasattr(args, 'teacher_model_path') and args.teacher_model_path:
-            print(f"Загрузка модели учителя из локального пути: {args.teacher_model_path}")
-            teacher_model = GPT2LMHeadModel.from_pretrained(args.teacher_model_path)
-        else:
-            print(f"Загрузка модели учителя из Hugging Face: {args.teacher_model}")
-            teacher_model = GPT2LMHeadModel.from_pretrained(args.teacher_model)
+        try:
+            if hasattr(args, 'teacher_model_path') and args.teacher_model_path:
+                print(f"Загрузка модели учителя из локального пути: {args.teacher_model_path}")
+                teacher_model = AutoModelForCausalLM.from_pretrained(args.teacher_model_path, trust_remote_code=True)
+            else:
+                print(f"Загрузка модели учителя из Hugging Face: {args.teacher_model}")
+                teacher_model = AutoModelForCausalLM.from_pretrained(args.teacher_model, trust_remote_code=True)
+        except Exception as e:
+            print(f"Ошибка при загрузке модели учителя: {e}")
+            raise ValueError(f"Не удалось загрузить модель учителя: {e}")
         
         # Загружаем модель студента
-        if hasattr(args, 'student_model_path') and args.student_model_path:
-            print(f"Загрузка модели студента из локального пути: {args.student_model_path}")
-            student_model = GPT2LMHeadModel.from_pretrained(args.student_model_path)
-        else:
-            print(f"Загрузка модели студента из Hugging Face: {args.student_model}")
-            student_model = GPT2LMHeadModel.from_pretrained(args.student_model)
+        try:
+            if hasattr(args, 'student_model_path') and args.student_model_path:
+                print(f"Загрузка модели студента из локального пути: {args.student_model_path}")
+                student_model = AutoModelForCausalLM.from_pretrained(args.student_model_path, trust_remote_code=True)
+            else:
+                print(f"Загрузка модели студента из Hugging Face: {args.student_model}")
+                student_model = AutoModelForCausalLM.from_pretrained(args.student_model, trust_remote_code=True)
+        except Exception as e:
+            print(f"Ошибка при загрузке модели студента: {e}")
+            raise ValueError(f"Не удалось загрузить модель студента: {e}")
+    
+    # Проверяем совместимость словарей моделей
+    teacher_vocab_size = teacher_model.config.vocab_size
+    student_vocab_size = student_model.config.vocab_size
+    
+    print(f"Размер словаря учителя: {teacher_vocab_size}")
+    print(f"Размер словаря студента: {student_vocab_size}")
+    
+    # Если словари несовместимы, копируем слой эмбеддингов и токенизатор от учителя к ученику
+    if teacher_vocab_size != student_vocab_size:
+        print(f"\n⚠️ Обнаружено несоответствие размеров словарей: учитель ({teacher_vocab_size}) vs студент ({student_vocab_size})")
+        print("Копирование слоя эмбеддингов и токенизатора от учителя к ученику...")
+        
+        # Копируем слой эмбеддингов от учителя к ученику
+        if hasattr(teacher_model, 'transformer') and hasattr(student_model, 'transformer'):
+            # Для моделей GPT-2
+            if hasattr(teacher_model.transformer, 'wte') and hasattr(student_model.transformer, 'wte'):
+                print("Копирование слоя эмбеддингов для GPT-2...")
+                # Сохраняем оригинальный размер эмбеддингов студента
+                original_embedding_dim = student_model.transformer.wte.embedding_dim
+                # Создаем новый слой эмбеддингов с размером словаря учителя, но размерностью эмбеддингов студента
+                new_embeddings = nn.Embedding(teacher_vocab_size, original_embedding_dim)
+                # Копируем веса из слоя эмбеддингов учителя (с учетом возможной разницы в размерности)
+                with torch.no_grad():
+                    # Если размерности эмбеддингов совпадают, копируем напрямую
+                    if teacher_model.transformer.wte.embedding_dim == original_embedding_dim:
+                        new_embeddings.weight.copy_(teacher_model.transformer.wte.weight)
+                    else:
+                        # Если размерности не совпадают, используем проекцию или усечение
+                        print(f"Размерности эмбеддингов не совпадают: учитель ({teacher_model.transformer.wte.embedding_dim}) vs студент ({original_embedding_dim})")
+                        if teacher_model.transformer.wte.embedding_dim > original_embedding_dim:
+                            # Усечение: берем только первые original_embedding_dim компонент
+                            new_embeddings.weight.copy_(teacher_model.transformer.wte.weight[:, :original_embedding_dim])
+                        else:
+                            # Проекция: заполняем доступные компоненты и оставляем остальные инициализированными случайно
+                            new_embeddings.weight[:, :teacher_model.transformer.wte.embedding_dim].copy_(teacher_model.transformer.wte.weight)
+                
+                # Заменяем слой эмбеддингов студента
+                student_model.transformer.wte = new_embeddings
+                
+                # Обновляем конфигурацию студента
+                student_model.config.vocab_size = teacher_vocab_size
+                
+                print("Слой эмбеддингов успешно скопирован от учителя к ученику")
+            
+            # Аналогично для выходного слоя (lm_head)
+            if hasattr(teacher_model, 'lm_head') and hasattr(student_model, 'lm_head'):
+                print("Обновление выходного слоя (lm_head)...")
+                # Создаем новый выходной слой с размером словаря учителя
+                original_output_dim = student_model.lm_head.out_features if hasattr(student_model.lm_head, 'out_features') else student_model.lm_head.weight.size(1)
+                new_lm_head = nn.Linear(original_output_dim, teacher_vocab_size, bias=False)
+                
+                # Копируем веса из выходного слоя учителя (с учетом возможной разницы в размерности)
+                with torch.no_grad():
+                    teacher_output_dim = teacher_model.lm_head.out_features if hasattr(teacher_model.lm_head, 'out_features') else teacher_model.lm_head.weight.size(1)
+                    if teacher_output_dim == original_output_dim:
+                        new_lm_head.weight.copy_(teacher_model.lm_head.weight)
+                    else:
+                        print(f"Размерности выходного слоя не совпадают: учитель ({teacher_output_dim}) vs студент ({original_output_dim})")
+                        # Адаптируем веса с учетом разных размерностей
+                        if hasattr(teacher_model.lm_head, 'weight') and hasattr(student_model.lm_head, 'weight'):
+                            if teacher_output_dim > original_output_dim:
+                                new_lm_head.weight.copy_(teacher_model.lm_head.weight[:, :original_output_dim])
+                            else:
+                                new_lm_head.weight[:, :teacher_output_dim].copy_(teacher_model.lm_head.weight)
+                
+                # Заменяем выходной слой студента
+                student_model.lm_head = new_lm_head
+                
+                print("Выходной слой успешно обновлен")
+        
+        # Для других архитектур моделей (не GPT-2)
+        elif hasattr(teacher_model, 'get_input_embeddings') and hasattr(student_model, 'get_input_embeddings'):
+            print("Копирование слоя эмбеддингов для общей архитектуры...")
+            teacher_embeddings = teacher_model.get_input_embeddings()
+            student_embeddings = student_model.get_input_embeddings()
+            
+            # Создаем новый слой эмбеддингов с размером словаря учителя, но размерностью эмбеддингов студента
+            original_embedding_dim = student_embeddings.embedding_dim
+            new_embeddings = nn.Embedding(teacher_vocab_size, original_embedding_dim)
+            
+            # Копируем веса из слоя эмбеддингов учителя (с учетом возможной разницы в размерности)
+            with torch.no_grad():
+                if teacher_embeddings.embedding_dim == original_embedding_dim:
+                    new_embeddings.weight.copy_(teacher_embeddings.weight)
+                else:
+                    print(f"Размерности эмбеддингов не совпадают: учитель ({teacher_embeddings.embedding_dim}) vs студент ({original_embedding_dim})")
+                    if teacher_embeddings.embedding_dim > original_embedding_dim:
+                        new_embeddings.weight.copy_(teacher_embeddings.weight[:, :original_embedding_dim])
+                    else:
+                        new_embeddings.weight[:, :teacher_embeddings.embedding_dim].copy_(teacher_embeddings.weight)
+            
+            # Заменяем слой эмбеддингов студента
+            student_model.set_input_embeddings(new_embeddings)
+            
+            # Обновляем выходной слой, если он доступен
+            if hasattr(teacher_model, 'get_output_embeddings') and hasattr(student_model, 'get_output_embeddings'):
+                teacher_output = teacher_model.get_output_embeddings()
+                student_output = student_model.get_output_embeddings()
+                
+                if teacher_output is not None and student_output is not None:
+                    print("Обновление выходного слоя...")
+                    # Создаем новый выходной слой с размером словаря учителя
+                    original_output_dim = student_output.in_features if hasattr(student_output, 'in_features') else student_output.weight.size(1)
+                    new_output = nn.Linear(original_output_dim, teacher_vocab_size, bias=False)
+                    
+                    # Копируем веса из выходного слоя учителя (с учетом возможной разницы в размерности)
+                    with torch.no_grad():
+                        teacher_output_dim = teacher_output.in_features if hasattr(teacher_output, 'in_features') else teacher_output.weight.size(1)
+                        if teacher_output_dim == original_output_dim:
+                            new_output.weight.copy_(teacher_output.weight)
+                        else:
+                            print(f"Размерности выходного слоя не совпадают: учитель ({teacher_output_dim}) vs студент ({original_output_dim})")
+                            if teacher_output_dim > original_output_dim:
+                                new_output.weight.copy_(teacher_output.weight[:, :original_output_dim])
+                            else:
+                                new_output.weight[:, :teacher_output_dim].copy_(teacher_output.weight)
+                    
+                    # Заменяем выходной слой студента
+                    student_model.set_output_embeddings(new_output)
+                    
+                    print("Выходной слой успешно обновлен")
+            
+            # Обновляем конфигурацию студента
+            student_model.config.vocab_size = teacher_vocab_size
+            
+            print("Слой эмбеддингов успешно скопирован от учителя к ученику")
+        
+        # Копируем токенизатор от учителя к ученику
+        print("Копирование токенизатора от учителя к ученику...")
+        # Используем токенизатор учителя для студента
+        # Это уже сделано, так как мы используем один токенизатор для обеих моделей
+        
+        print("✅ Словари моделей успешно синхронизированы!")
     
     # Создаем копию студента для сравнения до и после дистилляции
     student_model_before = copy.deepcopy(student_model)

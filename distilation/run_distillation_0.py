@@ -12,7 +12,7 @@ TEACHER_MODEL = 'gpt2-xl'
 
 # Модель студента (меньшая модель, которую мы обучаем)
 # Варианты: 'gpt2', 'gpt2-medium', 'Qwen/Qwen-1_8B-Chat' и т.д.
-STUDENT_MODEL = 'gpt2'
+STUDENT_MODEL = 'arnir0/Tiny-LLM'
 
 # Путь к локальной модели учителя (если None, будет использована модель из Hugging Face)
 TEACHER_MODEL_PATH = None
@@ -22,7 +22,7 @@ STUDENT_MODEL_PATH = None
 
 # === ДАННЫЕ ===
 # Датасет для обучения
-# Варианты: 'wikitext' (стандартный), 'pokemon' (пример пользовательского), 
+# Варианты: 'wikitext' (стандартный), 'pokemon' (пример пользовательского),
 # или путь к вашему собственному файлу
 DATASET = 'wikitext'
 
