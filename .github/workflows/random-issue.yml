@@ -28,10 +28,8 @@ jobs:
 
       - name: Commit empty with joke message
         run: |
-          # Configure Git author
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Create empty commit with the fetched joke
           git commit --allow-empty -m "${{ steps.get_joke.outputs.JOKE }}"
       
       - name: Push to main
