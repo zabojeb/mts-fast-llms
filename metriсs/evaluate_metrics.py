@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import time
+from torch import nn
 import seaborn as sns
 import psutil
 from codecarbon import EmissionsTracker
@@ -17,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Импорт функций метрик
-from metric_functions import *
+from .metric_functions import *
 
 
 # Типы задач
@@ -106,7 +107,8 @@ def load_model(model_name: str, device: str = "cuda") -> Tuple[Any, Any]:
 
 
 def train_func(
-        model_name: str,
+        model: nn.Module,
+        processor,
         dataset: HFDataset,
         task_type: TaskType,
         device: str = "cuda",
@@ -130,7 +132,6 @@ def train_func(
         - metrics_data: Dictionary with model inputs and performance metrics.
         - metrics_to_check_list: List of metric names to evaluate.
     """
-    model, processor = load_model(model_name, device)
     field_mapping = field_mapping or {}
 
     # Извлечение данных из датасета

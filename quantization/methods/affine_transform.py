@@ -1,43 +1,86 @@
+# Module done on 16.07 in 11:26
+
+from bitsandbytes.nn import Linear4bit, Params4bit
+from typing import List, NoReturn
 from torch import nn
 import gc
 
+from ...exceptions import QuantizationError
 from ..modules import *
 
 
-def scaled_weights(model: nn.Module, num_bits: int) -> nn.Module:
-    for name, layer in model.named_modules():
-        if isinstance(layer, nn.Linear):
-            parent = model
+def affine_transform(
+    model: nn.Module, targets_names: List[str], num_bits: int
+) -> NoReturn:
+    """
+    Applying affine transform to layers
 
-            parts = name.split(".")
-            for part in parts[:-1]:
-                parent = getattr(parent, part)
+    Args:
+        model: model for transform
+        targets_names: names of layers for transform
+        num_bits: quantity of bits for quantization
 
-            setattr(
-                parent,
-                parts[-1],
-                QuantizedLinear(
+    IMPORTANT: num_bits must be 8 or 4
+    """
+
+    if num_bits != 8 or num_bits != 4:
+        raise QuantizationError(
+            "Affine transform quantization supports only int8 and int4 quantization"
+        )
+
+    for name in targets_names:
+        parent = model
+        parts = name.split(".")
+        for part in parts[:-1]:
+            parent = getattr(parent, part)
+
+        layer = getattr(parent, parts[-1])
+
+        if num_bits == 8:
+            source = (
+                LinearAffine8bit(
                     weight=layer.weight.detach(),
                     bias=(
                         layer.bias.detach()
                         if hasattr(layer, "bias") and layer.bias is not None
                         else None
                     ),
-                    num_bits=num_bits,
                 ),
             )
+
+        elif num_bits == 4:
+            source = Linear4bit(
+                input_features=layer.in_features,
+                output_features=layer.out_features,
+                bias=hasattr(layer, "bias") and layer.bias is not None,
+            )
+
+            source.weight = Params4bit(data=layer.weight, requires_grad=False)
+
+            if source.bias:
+                source.bias = nn.Parameter(layer.bias)
+
+            source.to(layer.weight.device)
+
+        setattr(
+            parent,
+            parts[-1],
+            source,
+        )
 
     gc.collect()
 
 
 if __name__ == "__main__":
+    from ...layers_worker import get_names_from_type
+
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from torch import nn
     import torch
     import time
     import gc
 
-    device = "cuda"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     model = AutoModelForCausalLM.from_pretrained(
         "openai-community/gpt2-xl", trust_remote_code=True
@@ -56,7 +99,9 @@ if __name__ == "__main__":
     end = time()
     peak_memory = round(torch.cuda.max_memory_allocated() / 1e6, 1)
 
-    scaled_weights(model)
+    affine_transform(
+        model=model, targets_names=get_names_from_type(model, nn.Linear), num_bits=4
+    )
     torch.cuda.empty_cache()
     gc.collect()
 
