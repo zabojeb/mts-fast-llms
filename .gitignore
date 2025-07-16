@@ -209,3 +209,6 @@ __marimo__/
 # VS Code
 
 .vscode
+
+node_modules
+.idea
