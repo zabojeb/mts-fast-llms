@@ -1,3 +1,7 @@
+<img src="https://media.tenor.com/0_zrqLYnhrAAAAAj/chimp-chimpanzee.gif" width="256" height="144.64" alt="a chimpanzee is sitting on a white background and looking at the camera" fetchpriority="high" style="max-width: 272px; background-color: unset;">
+
+<img src="https://media1.tenor.com/m/sKLAAhWbzJkAAAAC/%D0%BF%D0%BE%D1%87%D0%B5%D0%BC%D1%83.gif" width="518" height="518" alt="a kitten is being held in someone 's hand with the words &quot; причина тряски &quot; written below it" fetchpriority="high" style="max-width: 518px;">
+
 # Ускорение LLM и VLM моделей
 
 Данный репозиторий содержит материалы по методам ускорения больших языковых моделей (LLM) и мультимодальных моделей (VLM).
