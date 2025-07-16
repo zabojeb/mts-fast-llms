@@ -1,43 +1,42 @@
+# .github/workflows/joke-commit.yml
 name: Empty Commit with Geek Joke
 
 on:
   schedule:
-    # Run every 5 minutes
     - cron: '*/5 * * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write  # нужно, чтобы GITHUB_TOKEN имел право пушить
 
 jobs:
   joke-commit:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          # Ensure we checkout the main branch
-          ref: main
-          # Persist the GITHUB_TOKEN for pushing
-          token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Checkout main
+      uses: actions/checkout@v3
+      with:
+        ref: main
+        fetch-depth: 0      # чтобы история была полная и пушить было безопасно
 
-      - name: Fetch a geek joke
-        id: get_joke
-        run: |
-          joke=$(curl -s https://geek-jokes.sameerkumar.website/api?format=text)
-          echo "JOKE<<EOF" >> $GITHUB_OUTPUT
-          echo "$joke" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+    - name: Fetch a geek joke
+      id: get_joke
+      run: |
+        # Сохраняем ответ API в многострочную output-переменную
+        echo "JOKE<<EOF" >> $GITHUB_OUTPUT
+        curl -s https://geek-jokes.sameerkumar.website/api?format=text >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Commit empty with joke message
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Передаём сообщение через stdin — никаких проблем с разбиением на слова
-          git commit --allow-empty -F - <<EOF
-${{ steps.get_joke.outputs.JOKE }}
-EOF
-      
-      - name: Push to main
-        run: |
-          git push origin main
-        env:
-          # Use GITHUB_TOKEN to authenticate the push
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Commit empty with joke message
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        # Обязательно -m, иначе следующее слово будет трактоваться как pathspec
+        git commit --allow-empty -m "${{ steps.get_joke.outputs.JOKE }}"
+
+    - name: Push to main
+      uses: ad-m/github-push-action@v0.6.0
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: main
