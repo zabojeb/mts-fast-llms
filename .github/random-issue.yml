@@ -1,0 +1,33 @@
+# .github/workflows/random-issue.yml
+name: Create Random Issue
+
+# Запускаем по расписанию — каждые 30 минут
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+
+# Разрешаем запись в Issues
+permissions:
+  issues: write
+
+jobs:
+  create_random_issue:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Генерируем случайную строку и сохраняем её в вывод
+      - name: Generate random issue title
+        id: gen
+        run: |
+          # получаем 8 случайных буквно-цифровых символов
+          RAND=$(head -c 16 /dev/urandom | base64 | tr -dc '[:alnum:]' | head -c 8)
+          echo "title=Random Issue $RAND" >> $GITHUB_OUTPUT
+
+      # Используем готовое Action для создания Issue
+      - name: Create issue
+        uses: peter-evans/create-issue@v6
+        with:
+          title: ${{ steps.gen.outputs.title }}
+          body: |
+            Этот issue был автоматически сгенерирован каждые 30 минут.
+          labels: automated
