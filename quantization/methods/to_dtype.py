@@ -1,11 +1,15 @@
+<<<<<<< HEAD
 # Module done on 16.07 in 11:28
 
+=======
+>>>>>>> a523bfc160e57732f7fa65d0fad6e9cf377873d2
 from torch import dtype
 from torch import nn
 import torch
 
 
 def weights_to_dtype(model: nn.Module, dtype: dtype) -> nn.Module:
+<<<<<<< HEAD
     """
     Applies dtype to model and returns it
 
@@ -17,6 +21,8 @@ def weights_to_dtype(model: nn.Module, dtype: dtype) -> nn.Module:
         model with certain dtype
     """
 
+=======
+>>>>>>> a523bfc160e57732f7fa65d0fad6e9cf377873d2
     return model.to(dtype)
 
 
