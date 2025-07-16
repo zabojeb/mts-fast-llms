@@ -250,9 +250,9 @@ def train_func(
     metrics_data["emissions"] = carbon_tracker.stop()
     metrics_data["predictions"] = predictions
 
-    # Эмбеддинги изображений для vision (OwlV2)
-    if task_type == TaskType.VISION and model_name == "owlv2":
-        metrics_data["image_features"] = outputs.image_embeds if hasattr(outputs, "image_embeds") else None
+    # # Эмбеддинги изображений для vision (OwlV2)
+    # if task_type == TaskType.VISION and model_name == "owlv2":
+    #     metrics_data["image_features"] = outputs.image_embeds if hasattr(outputs, "image_embeds") else None
 
     # Все метрики
     metrics_to_check_list = TASK_METRICS[task_type]
