@@ -30,7 +30,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit --allow-empty -m "${{ steps.get_joke.outputs.JOKE }}"
+          # Передаём сообщение через stdin — никаких проблем с разбиением на слова
+          git commit --allow-empty -F - <<EOF
+${{ steps.get_joke.outputs.JOKE }}
+EOF
       
       - name: Push to main
         run: |
