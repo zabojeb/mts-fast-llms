@@ -33,7 +33,7 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         # Обязательно -m, иначе следующее слово будет трактоваться как pathspec
-        git commit --allow-empty -m "${{ steps.get_joke.outputs.JOKE }}"
+        git commit --allow-empty -m ${{ steps.get_joke.outputs.JOKE }}
 
     - name: Push to main
       uses: ad-m/github-push-action@v0.6.0
