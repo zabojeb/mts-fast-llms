@@ -69,7 +69,7 @@ def structured_prune_llm(model: torch.nn.Module, prune_ratio: float) -> torch.nn
 
     return model
 
-def measure_size_on_disk(model: torch.nn.PreTrainedModel) -> int:
+def measure_size_on_disk(model) -> int:
     with tempfile.TemporaryDirectory() as td:
         model.save_pretrained(td)
         total = 0
@@ -78,7 +78,7 @@ def measure_size_on_disk(model: torch.nn.PreTrainedModel) -> int:
                 total += os.path.getsize(os.path.join(root, f))
     return total
 
-def sanity_check(model: torch.nn.PreTrainedModel, tokenizer: AutoTokenizer, device: torch.device):
+def sanity_check(model, tokenizer: AutoTokenizer, device: torch.device):
     model.eval()
     prompt = "Hello, world!"
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
@@ -88,7 +88,7 @@ def sanity_check(model: torch.nn.PreTrainedModel, tokenizer: AutoTokenizer, devi
     print(f"✅ Sanity check passed: logits shape {tuple(logits.shape)}")
 
 if __name__ == "__main__":
-    model_name = "Qwen/Qwen-3-0.6B"
+    model_name = "Qwen/Qwen3-0.6B"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     print("Loading model and tokenizer…")
