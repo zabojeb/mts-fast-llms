@@ -1,32 +1,42 @@
-name: Create Random Issue
+name: Empty Commit with Geek Joke
 
-# Запускаем по расписанию — каждые 30 минут
 on:
   schedule:
+    # Run every 5 minutes
     - cron: '*/5 * * * *'
-
-# Разрешаем запись в Issues
-permissions:
-  issues: write
+  workflow_dispatch:
 
 jobs:
-  create_random_issue:
+  joke-commit:
     runs-on: ubuntu-latest
-
     steps:
-      # Генерируем случайную строку и сохраняем её в вывод
-      - name: Generate random issue title
-        id: gen
-        run: |
-          # получаем 8 случайных буквно-цифровых символов
-          RAND=$(head -c 16 /dev/urandom | base64 | tr -dc '[:alnum:]' | head -c 8)
-          echo "title=ROFLS $RAND" >> $GITHUB_OUTPUT
-
-      # Используем готовое Action для создания Issue
-      - name: Create issue
-        uses: peter-evans/create-issue@v6
+      - name: Checkout repository
+        uses: actions/checkout@v3
         with:
-          title: ${{ steps.gen.outputs.title }}
-          body: |
-            ЭТО ROFLS
-          labels: automated
+          # Ensure we checkout the main branch
+          ref: main
+          # Persist the GITHUB_TOKEN for pushing
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch a geek joke
+        id: get_joke
+        run: |
+          joke=$(curl -s https://geek-jokes.sameerkumar.website/api?format=text)
+          echo "JOKE<<EOF" >> $GITHUB_OUTPUT
+          echo "$joke" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Commit empty with joke message
+        run: |
+          # Configure Git author
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Create empty commit with the fetched joke
+          git commit --allow-empty -m "${{ steps.get_joke.outputs.JOKE }}"
+      
+      - name: Push to main
+        run: |
+          git push origin main
+        env:
+          # Use GITHUB_TOKEN to authenticate the push
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
