@@ -1,0 +1,13 @@
+{
+  "name": "electron-node-editor",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^26.0.0",
+    "rete": "^1.4.4",
+    "rete-vue-render-plugin": "^0.2.2"
+  }
+}
