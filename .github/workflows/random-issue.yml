@@ -1,47 +1,32 @@
-# .github/workflows/random-issue.yml
-name: Create Random Issue with Mistral
+name: Create Random Issue
 
+# Запускаем по расписанию — каждые 30 минут
 on:
   schedule:
-    # каждые 5 минут
     - cron: '*/5 * * * *'
 
+# Разрешаем запись в Issues
 permissions:
   issues: write
-
-env:
-  # Нужно добавить в репозиторий Secret с вашим ключом
-  MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
 
 jobs:
   create_random_issue:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Generate dumb commit message via Mistral
+      # Генерируем случайную строку и сохраняем её в вывод
+      - name: Generate random issue title
         id: gen
         run: |
-          # делаем запрос к Mistral Inference API
-          RESPONSE=$(curl -s \
-            -H "Authorization: Bearer $MISTRAL_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d '{"inputs":"Generate a dumb commit message."}' \
-            https://api.mistral.ai/inference/v1/models/mistral-7b-instruct)
-          
-          # парсим ответ (предполагается, что поле с текстом – generated_text)
-          MESSAGE=$(echo "$RESPONSE" | jq -r '.generated_text // empty' | head -n1)
+          # получаем 8 случайных буквно-цифровых символов
+          RAND=$(head -c 16 /dev/urandom | base64 | tr -dc '[:alnum:]' | head -c 8)
+          echo "title=ROFLS $RAND" >> $GITHUB_OUTPUT
 
-          # если вдруг пусто, ставим fallback
-          if [ -z "$MESSAGE" ]; then
-            MESSAGE="🤖 Commit message overload!"
-          fi
-
-          echo "title=$MESSAGE" >> $GITHUB_OUTPUT
-
+      # Используем готовое Action для создания Issue
       - name: Create issue
         uses: peter-evans/create-issue@v6
         with:
           title: ${{ steps.gen.outputs.title }}
           body: |
-            Это issue с тупым сообщением, сгенерированным Mistral API.
+            ЭТО ROFLS
           labels: automated
