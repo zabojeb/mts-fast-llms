@@ -12,17 +12,11 @@ TEACHER_MODEL = 'gpt2-xl'
 
 # Модель студента (меньшая модель, которую мы обучаем)
 # Варианты: 'gpt2', 'gpt2-medium', 'Qwen/Qwen-1_8B-Chat' и т.д.
-STUDENT_MODEL = 'arnir0/Tiny-LLM'
-
-# Путь к локальной модели учителя (если None, будет использована модель из Hugging Face)
-TEACHER_MODEL_PATH = None
-
-# Путь к локальной модели студента (если None, будет использована модель из Hugging Face)
-STUDENT_MODEL_PATH = None
+STUDENT_MODEL = 'gpt2'
 
 # === ДАННЫЕ ===
 # Датасет для обучения
-# Варианты: 'wikitext' (стандартный), 'pokemon' (пример пользовательского),
+# Варианты: 'wikitext' (стандартный), 'pokemon' (пример пользовательского), 
 # или путь к вашему собственному файлу
 DATASET = 'wikitext'
 
@@ -105,8 +99,6 @@ DISTILLATION_CONFIG = {
     'models': {
         'teacher_model_name': TEACHER_MODEL,
         'student_model_name': STUDENT_MODEL,
-        'teacher_model_path': TEACHER_MODEL_PATH,
-        'student_model_path': STUDENT_MODEL_PATH,
     },
     'dataset': {
         'dataset_name': DATASET,
