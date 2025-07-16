@@ -306,7 +306,7 @@ class KnowledgeDistillation(BaseOptimizer):
                 'teacher_params': sum(p.numel() for p in self.teacher_model.parameters()),
                 'student_params': sum(p.numel() for p in self.student_model.parameters()),
                 'compression_ratio': sum(p.numel() for p in self.teacher_model.parameters()) / 
-                                   sum(p.numel() for p in self.student_model.parameters())
+                                sum(p.numel() for p in self.student_model.parameters())
             }
             config_info.update(model_info)
         

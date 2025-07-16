@@ -4,7 +4,7 @@ from typing import List, Tuple
 from torch import nn
 
 
-def predict_memory_coeff(
+def predict_memory(
     model: nn.Module, targets_names: List[str], num_bits: int
 ) -> Tuple[int, int]:
     """

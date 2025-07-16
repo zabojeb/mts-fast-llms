@@ -1,5 +1,3 @@
-# Module done on 16.07 in 11:59
-
 from torch import nn
 
 from .config import QuantizationConfig
@@ -25,9 +23,7 @@ def quantize(
         model = weights_to_dtype(model, config.compute_dtype)
 
     if config.num_bits is not None:
-        affine_transform(
-            model=model, targets_names=config.targets_names, num_bits=config.num_bits
-        )
+        scaled_weights(model=model, num_bits=config.num_bits)
 
     return model
 
