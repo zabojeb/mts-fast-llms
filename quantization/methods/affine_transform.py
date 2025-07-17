@@ -23,7 +23,7 @@ def affine_transform(
     IMPORTANT: num_bits must be 8 or 4
     """
 
-    if num_bits != 8 or num_bits != 4:
+    if not (num_bits != 8 or num_bits != 4):
         raise QuantizationError(
             "Affine transform quantization supports only int8 and int4 quantization"
         )
@@ -37,14 +37,12 @@ def affine_transform(
         layer = getattr(parent, parts[-1])
 
         if num_bits == 8:
-            source = (
-                LinearAffine8bit(
-                    weight=layer.weight.detach(),
-                    bias=(
-                        layer.bias.detach()
-                        if hasattr(layer, "bias") and layer.bias is not None
-                        else None
-                    ),
+            source = LinearAffine8bit(
+                weight=layer.weight.detach(),
+                bias=(
+                    layer.bias.detach()
+                    if hasattr(layer, "bias") and layer.bias is not None
+                    else None
                 ),
             )
 
@@ -60,14 +58,13 @@ def affine_transform(
             if source.bias:
                 source.bias = nn.Parameter(layer.bias)
 
-            source.to(layer.weight.device)
-
         setattr(
             parent,
             parts[-1],
             source,
         )
 
+    model.to(model.device)
     gc.collect()
 
 

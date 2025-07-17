@@ -1,7 +1,9 @@
 # Module done on 16.07 in 11:59
 
+from random import sample
 from torch import nn
 
+from ..layers_worker import get_names_from_type
 from .config import QuantizationConfig
 from .methods import *
 
@@ -11,7 +13,7 @@ def quantize(
     config: QuantizationConfig,
 ) -> nn.Module:
     """
-    Quantizes copy of the model and returns it
+    Quantizes the model and returns it
 
     Kwargs:
         model: input model for quantization
@@ -24,10 +26,19 @@ def quantize(
     if config.compute_dtype is not None:
         model = weights_to_dtype(model, config.compute_dtype)
 
-    if config.num_bits is not None:
-        affine_transform(
-            model=model, targets_names=config.targets_names, num_bits=config.num_bits
-        )
+    if config.layers is not None:
+        for layer_type, layer in config.layers.items():
+            if layer.fraction is not None:
+                targets_names = get_names_from_type(model=model, layer_type=layer_type)
+                to_quantize = sample(
+                    targets_names, k=round(len(targets_names) * layer.fraction)
+                )
+            elif layer.names is not None:
+                to_quantize = layer.names
+
+            affine_transform(
+                model=model, targets_names=to_quantize, num_bits=layer.qtype
+            )
 
     return model
 
