@@ -1,13 +1,331 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Node Editor</title>
-    <link rel="stylesheet" href="renderer/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LLM Optimization Node Editor</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        background: #1a1a1a;
+        color: #e0e0e0;
+        overflow: hidden;
+      }
+
+      #header {
+        background: #2a2a2a;
+        padding: 10px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #3a3a3a;
+      }
+
+      #header h1 {
+        font-size: 20px;
+        font-weight: 500;
+      }
+
+      #toolbar {
+        display: flex;
+        gap: 10px;
+      }
+
+      button {
+        background: #3a3a3a;
+        color: #e0e0e0;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.2s;
+      }
+
+      button:hover {
+        background: #4a4a4a;
+      }
+
+      button.primary {
+        background: #4a7c59;
+      }
+
+      button.primary:hover {
+        background: #5a8c69;
+      }
+
+      #sidebar {
+        position: absolute;
+        left: 0;
+        top: 61px;
+        bottom: 30px;
+        width: 250px;
+        background: #2a2a2a;
+        border-right: 1px solid #3a3a3a;
+        padding: 20px;
+        overflow-y: auto;
+      }
+
+      #sidebar h3 {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 15px;
+        text-transform: uppercase;
+        color: #888;
+      }
+
+      .node-item {
+        background: #3a3a3a;
+        padding: 12px;
+        margin-bottom: 8px;
+        border-radius: 4px;
+        cursor: move;
+        transition: background 0.2s;
+      }
+
+      .node-item:hover {
+        background: #4a4a4a;
+      }
+
+      .node-item .title {
+        font-weight: 500;
+        margin-bottom: 4px;
+      }
+
+      .node-item .description {
+        font-size: 12px;
+        color: #888;
+      }
+
+      #editor {
+        position: absolute;
+        left: 250px;
+        top: 61px;
+        right: 0;
+        bottom: 30px;
+        background: #1a1a1a;
+        background-image: radial-gradient(circle, #2a2a2a 1px, transparent 1px);
+        background-size: 20px 20px;
+        overflow: hidden;
+      }
+
+      #editor .background {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+      }
+
+      #statusbar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 30px;
+        background: #2a2a2a;
+        border-top: 1px solid #3a3a3a;
+        display: flex;
+        align-items: center;
+        padding: 0 20px;
+        font-size: 12px;
+        color: #888;
+      }
+
+      /* Rete.js custom styles */
+      .node {
+        background: #2a2a2a !important;
+        border: 1px solid #3a3a3a !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+      }
+
+      .node.selected {
+        border-color: #4a7c59 !important;
+        box-shadow: 0 0 0 2px #4a7c59 !important;
+      }
+
+      .node .title {
+        background: #3a3a3a !important;
+        color: #e0e0e0 !important;
+        padding: 10px !important;
+        font-weight: 500 !important;
+        border-radius: 8px 8px 0 0 !important;
+      }
+
+      .node .input-title,
+      .node .output-title {
+        color: #e0e0e0 !important;
+      }
+
+      .node .control {
+        padding: 8px !important;
+      }
+
+      .node .control input,
+      .node .control select {
+        background: #1a1a1a !important;
+        color: #e0e0e0 !important;
+        border: 1px solid #3a3a3a !important;
+        padding: 6px !important;
+        border-radius: 4px !important;
+        width: 100% !important;
+      }
+
+      .node .socket {
+        background: #4a7c59 !important;
+        border: 2px solid #3a3a3a !important;
+      }
+
+      .node .socket.used {
+        background: #5a8c69 !important;
+      }
+
+      .connection .main-path {
+        stroke: #4a7c59 !important;
+        stroke-width: 3px !important;
+      }
+
+      #modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+      }
+
+      #modal-content {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #2a2a2a;
+        padding: 30px;
+        border-radius: 8px;
+        min-width: 400px;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+
+      #modal h2 {
+        margin-bottom: 20px;
+      }
+
+      #modal pre {
+        background: #1a1a1a;
+        padding: 15px;
+        border-radius: 4px;
+        overflow-x: auto;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      #modal button {
+        margin-top: 20px;
+      }
+
+      .loading {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid #4a7c59;
+        border-radius: 50%;
+        border-top-color: transparent;
+        animation: spin 0.8s linear infinite;
+        margin-left: 10px;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="rete"></div>
-    <button id="run">Запустить пайплайн</button>
-    <script src="renderer/editor.js"></script>
+    <div id="header">
+      <h1>LLM Optimization Node Editor</h1>
+      <div id="toolbar">
+        <button onclick="editor.savePipeline()">Save Pipeline</button>
+        <button onclick="editor.loadPipeline()">Load Pipeline</button>
+        <button onclick="editor.clearEditor()">Clear</button>
+        <button class="primary" onclick="editor.executePipeline()">
+          Execute Pipeline
+        </button>
+      </div>
+    </div>
+
+    <div id="sidebar">
+      <h3>Model Nodes</h3>
+      <div class="node-item" draggable="true" data-node="model-load">
+        <div class="title">Model Load</div>
+        <div class="description">Load model from HuggingFace or local path</div>
+      </div>
+      <div class="node-item" draggable="true" data-node="model-save">
+        <div class="title">Model Save</div>
+        <div class="description">Save optimized model</div>
+      </div>
+
+      <h3>Optimization Nodes</h3>
+      <div class="node-item" draggable="true" data-node="pruning">
+        <div class="title">Pruning</div>
+        <div class="description">Remove unnecessary weights</div>
+      </div>
+      <div class="node-item" draggable="true" data-node="quantization">
+        <div class="title">Quantization</div>
+        <div class="description">Reduce model precision</div>
+      </div>
+      <div class="node-item" draggable="true" data-node="distillation">
+        <div class="title">Distillation</div>
+        <div class="description">Transfer knowledge to smaller model</div>
+      </div>
+
+      <h3>Parameter Nodes</h3>
+      <div class="node-item" draggable="true" data-node="parameters">
+        <div class="title">Optimization Parameters</div>
+        <div class="description">Configure optimization settings</div>
+      </div>
+    </div>
+
+    <div id="editor"></div>
+
+    <div id="statusbar">
+      <span id="status">Ready</span>
+    </div>
+
+    <div id="modal">
+      <div id="modal-content">
+        <h2>Execution Output</h2>
+        <pre id="modal-text"></pre>
+        <button onclick="document.getElementById('modal').style.display='none'">
+          Close
+        </button>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.7.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/rete@1.5.2/build/rete.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/rete-connection-plugin@0.9.0/build/connection-plugin.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/rete-area-plugin@0.2.1/build/area-plugin.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/rete-vue-render-plugin@0.5.0/build/vue-render-plugin.min.js"></script>
+    <script>
+      // Filter fix for vue-render-plugin
+      if (typeof window !== "undefined" && !window.filters) {
+        window.filters = [];
+      }
+    </script>
+    <script src="editor.js"></script>
   </body>
 </html>

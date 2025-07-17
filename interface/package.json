@@ -1,13 +1,61 @@
 {
-  "name": "electron-node-editor",
+  "name": "llm-optimization-editor",
   "version": "1.0.0",
+  "description": "Node editor for LLM optimization pipelines",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dev": "NODE_ENV=development electron .",
+    "build": "electron-builder",
+    "dist": "electron-builder --publish=never"
+  },
+  "keywords": [
+    "llm",
+    "optimization",
+    "node-editor",
+    "electron"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4"
   },
   "dependencies": {
-    "electron": "^26.0.0",
-    "rete": "^1.4.4",
-    "rete-vue-render-plugin": "^0.2.2"
+    "rete": "^1.5.2",
+    "rete-area-plugin": "^0.2.1",
+    "rete-connection-plugin": "^0.9.0",
+    "rete-vue-render-plugin": "^0.5.0",
+    "vue": "^2.7.14"
+  },
+  "build": {
+    "appId": "com.example.llm-optimization-editor",
+    "productName": "LLM Optimization Editor",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!**/*.ts",
+      "!*.code-workspace",
+      "!LICENSE.md",
+      "!package-lock.json",
+      "!yarn.lock",
+      "!.editorconfig",
+      "!.eslintrc*",
+      "!.prettierrc*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "icon.png"
+    }
   }
 }
