@@ -1,0 +1,55 @@
+_id,id,likes,private,downloads,pipeline_tag,library_name,createdAt,modelId,parameters,model_size,model_size_mb,last_modified,author,library
+678dc6fff905d106be796d8a,deepseek-ai/DeepSeek-R1,12494,False,843787,text-generation,transformers,2025-01-20T03:46:07.000Z,deepseek-ai/DeepSeek-R1,3.0M,3.0 MB,3.0,2025-03-27T04:01:59.000Z,deepseek-ai,transformers
+661f97d48e7f3438386f755d,meta-llama/Meta-Llama-3-8B,6250,False,314152,text-generation,transformers,2024-04-17T09:35:16.000Z,meta-llama/Meta-Llama-3-8B,8.0B,,,2024-09-27T15:52:33.000Z,meta-llama,transformers
+676ca1388118866906abbd7c,hexgrad/Kokoro-82M,4676,False,1503133,text-to-speech,,2024-12-26T00:20:08.000Z,hexgrad/Kokoro-82M,82.0M,82.0 MB,82.0,2025-04-10T18:12:48.000Z,hexgrad,
+64b02a230c8415cd4a159fff,meta-llama/Llama-2-7b-chat-hf,4499,False,1043239,text-generation,transformers,2023-07-13T16:45:23.000Z,meta-llama/Llama-2-7b-chat-hf,7.0B,,,2024-04-17T08:40:48.000Z,meta-llama,transformers
+657607b0a90ae2daaef65917,mistralai/Mixtral-8x7B-Instruct-v0.1,4492,False,387691,text-generation,transformers,2023-12-10T18:47:12.000Z,mistralai/Mixtral-8x7B-Instruct-v0.1,7.0B,,,2024-08-19T13:18:42.000Z,mistralai,transformers
+64aa630b73790912c790894e,meta-llama/Llama-2-7b,4367,False,0,text-generation,,2023-07-09T07:34:35.000Z,meta-llama/Llama-2-7b,7.0B,,,2024-04-17T08:12:44.000Z,meta-llama,
+6698d8a0653e4babe21e1e7d,meta-llama/Llama-3.1-8B-Instruct,4311,False,6252541,text-generation,transformers,2024-07-18T08:56:00.000Z,meta-llama/Llama-3.1-8B-Instruct,8.0B,,,2024-09-25T17:00:57.000Z,meta-llama,transformers
+661f97d0b00f5f1f620c4f25,meta-llama/Meta-Llama-3-8B-Instruct,4073,False,1484139,text-generation,transformers,2024-04-17T09:35:12.000Z,meta-llama/Meta-Llama-3-8B-Instruct,8.0B,,,2025-06-18T23:49:51.000Z,meta-llama,transformers
+676c000762cee1f3abc3ed5f,deepseek-ai/DeepSeek-V3,3917,False,419211,text-generation,transformers,2024-12-25T12:52:23.000Z,deepseek-ai/DeepSeek-V3,3.0M,3.0 MB,3.0,2025-03-27T04:01:45.000Z,deepseek-ai,transformers
+650aedb6238a644cb93a52c3,mistralai/Mistral-7B-v0.1,3885,False,491165,text-generation,transformers,2023-09-20T13:03:50.000Z,mistralai/Mistral-7B-v0.1,7.0B,,,2024-07-24T14:04:08.000Z,mistralai,transformers
+6796251e22990ae89b1f60f1,deepseek-ai/Janus-Pro-7B,3458,False,105070,any-to-any,transformers,2025-01-26T12:05:50.000Z,deepseek-ai/Janus-Pro-7B,7.0B,,,2025-02-01T08:00:16.000Z,deepseek-ai,transformers
+65c5577b1080431ea9e083cd,google/gemma-7b,3182,False,73221,text-generation,transformers,2024-02-08T22:36:43.000Z,google/gemma-7b,7.0B,,,2024-06-27T14:09:40.000Z,google,transformers
+67e125b6c185423c1e404364,deepseek-ai/DeepSeek-V3-0324,3000,False,535192,text-generation,transformers,2025-03-24T09:28:22.000Z,deepseek-ai/DeepSeek-V3-0324,3.0M,3.0 MB,3.0,2025-03-27T04:01:53.000Z,deepseek-ai,transformers
+65770c3426ef61bbf101d4da,mistralai/Mistral-7B-Instruct-v0.2,2866,False,1665908,text-generation,transformers,2023-12-11T13:18:44.000Z,mistralai/Mistral-7B-Instruct-v0.2,7.0B,,,2024-09-27T10:41:20.000Z,mistralai,transformers
+640f4f1409c94e1d9bca3ffc,THUDM/chatglm-6b,2862,False,2330,,transformers,2023-03-13T16:28:04.000Z,THUDM/chatglm-6b,6.0B,,,2024-08-04T08:44:58.000Z,THUDM,transformers
+680487d4349dbebdfa95a27f,nari-labs/Dia-1.6B,2635,False,95047,text-to-speech,,2025-04-20T05:36:20.000Z,nari-labs/Dia-1.6B,1.6B,,,2025-06-01T13:13:54.000Z,nari-labs,
+67b3d091b9895fea7fe29e42,perplexity-ai/r1-1776,2281,False,102488,text-generation,transformers,2025-02-18T00:13:05.000Z,perplexity-ai/r1-1776,3.0M,3.0 MB,3.0,2025-02-26T17:40:09.000Z,perplexity-ai,transformers
+6836db82a3626cb7b5343be8,deepseek-ai/DeepSeek-R1-0528,2277,False,327097,text-generation,transformers,2025-05-28T09:46:42.000Z,deepseek-ai/DeepSeek-R1-0528,3.0M,3.0 MB,3.0,2025-05-29T11:37:44.000Z,deepseek-ai,transformers
+67c9c10d54d811c24a021731,sesame/csm-1b,2136,False,30212,text-to-speech,,2025-03-06T15:36:45.000Z,sesame/csm-1b,1.0B,,,2025-05-27T12:21:26.000Z,sesame,
+64b0234d53bd91402e6ad49c,meta-llama/Llama-2-7b-hf,2102,False,634067,text-generation,transformers,2023-07-13T16:16:13.000Z,meta-llama/Llama-2-7b-hf,7.0B,,,2024-04-17T08:40:16.000Z,meta-llama,transformers
+64971933a9c42bc6a848d3f4,THUDM/chatglm2-6b,2050,False,696866,,transformers,2023-06-24T16:26:27.000Z,THUDM/chatglm2-6b,6.0B,,,2024-08-04T08:41:38.000Z,THUDM,transformers
+66eaebb25fcdca258b9576cb,meta-llama/Llama-3.2-1B,1988,False,3528874,text-generation,transformers,2024-09-18T15:03:14.000Z,meta-llama/Llama-3.2-1B,1.0B,,,2024-10-24T15:08:03.000Z,meta-llama,transformers
+664dc170474f2283fa5c8659,mistralai/Mistral-7B-Instruct-v0.3,1895,False,1195451,text-generation,transformers,2024-05-22T09:57:04.000Z,mistralai/Mistral-7B-Instruct-v0.3,7.0B,,,2024-08-21T12:18:25.000Z,mistralai,transformers
+65143cd8e31c0e2e3df713e5,mistralai/Mistral-7B-Instruct-v0.1,1752,False,158531,text-generation,transformers,2023-09-27T14:31:52.000Z,mistralai/Mistral-7B-Instruct-v0.1,7.0B,,,2024-08-22T11:33:25.000Z,mistralai,transformers
+653a4cbd66081db6fc588b21,HuggingFaceH4/zephyr-7b-beta,1744,False,396812,text-generation,transformers,2023-10-26T11:25:49.000Z,HuggingFaceH4/zephyr-7b-beta,7.0B,,,2024-10-16T11:48:13.000Z,HuggingFaceH4,transformers
+6569aa681d7c2ca7b7bfcc80,mistralai/Mixtral-8x7B-v0.1,1728,False,58566,text-generation,transformers,2023-12-01T09:42:00.000Z,mistralai/Mixtral-8x7B-v0.1,7.0B,,,2024-07-24T14:02:01.000Z,mistralai,transformers
+67de202b6599e7158f6912f4,Qwen/Qwen2.5-Omni-7B,1707,False,115999,any-to-any,transformers,2025-03-22T02:27:55.000Z,Qwen/Qwen2.5-Omni-7B,7.0B,,,2025-04-30T13:48:45.000Z,Qwen,transformers
+66944f1fe0c5c2e493a804f5,meta-llama/Llama-3.1-8B,1695,False,727783,text-generation,transformers,2024-07-14T22:20:15.000Z,meta-llama/Llama-3.1-8B,8.0B,,,2024-10-16T22:00:37.000Z,meta-llama,transformers
+676bfff64b96c8ead0a1edf0,deepseek-ai/DeepSeek-V3-Base,1661,False,117546,,,2024-12-25T12:52:06.000Z,deepseek-ai/DeepSeek-V3-Base,3.0M,3.0 MB,3.0,2025-03-27T04:00:09.000Z,deepseek-ai,
+66eaef786865fea1324edb5d,meta-llama/Llama-3.2-3B-Instruct,1599,False,1610490,text-generation,transformers,2024-09-18T15:19:20.000Z,meta-llama/Llama-3.2-3B-Instruct,3.0B,,,2024-10-24T15:07:29.000Z,meta-llama,transformers
+621ffdc036468d709f1753ba,EleutherAI/gpt-j-6b,1506,False,141082,text-generation,transformers,2022-03-02T23:29:04.000Z,EleutherAI/gpt-j-6b,6.0B,,,2023-06-21T14:33:36.000Z,EleutherAI,transformers
+67acc0f1b150b8272b721c3b,ds4sd/SmolDocling-256M-preview,1484,False,185771,image-text-to-text,transformers,2025-02-12T15:40:33.000Z,ds4sd/SmolDocling-256M-preview,256.0M,256.0 MB,256.0,2025-05-16T15:13:30.000Z,ds4sd,transformers
+67bcf3bca03bde20d15377c6,microsoft/Phi-4-multimodal-instruct,1452,False,329276,automatic-speech-recognition,transformers,2025-02-24T22:33:32.000Z,microsoft/Phi-4-multimodal-instruct,4.0M,4.0 MB,4.0,2025-05-01T15:26:55.000Z,microsoft,transformers
+6848029d9a16b13edd1a3de4,nanonets/Nanonets-OCR-s,1405,False,311263,image-text-to-text,transformers,2025-06-10T10:02:05.000Z,nanonets/Nanonets-OCR-s,3.0B,2.0 MB,2.0,2025-06-20T19:15:33.000Z,nanonets,transformers
+682a33deaa9f5102c4027079,google/gemma-3n-E4B-it-litert-preview,1372,False,0,image-text-to-text,,2025-05-18T19:24:14.000Z,google/gemma-3n-E4B-it-litert-preview,4.0B,,,2025-05-26T11:06:28.000Z,google,
+687060f05721fba56ca177a8,moonshotai/Kimi-K2-Instruct,1344,False,76439,text-generation,transformers,2025-07-11T00:55:12.000Z,moonshotai/Kimi-K2-Instruct,3.0M,3.0 MB,3.0,2025-07-15T08:41:58.000Z,moonshotai,transformers
+658fb85235c41262d661dc48,TinyLlama/TinyLlama-1.1B-Chat-v1.0,1329,False,953822,text-generation,transformers,2023-12-30T06:27:30.000Z,TinyLlama/TinyLlama-1.1B-Chat-v1.0,1.1B,,,2024-03-17T05:07:08.000Z,TinyLlama,transformers
+678e11922b39b4ed1381531b,deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B,1271,False,988978,text-generation,transformers,2025-01-20T09:04:18.000Z,deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B,1.5B,,,2025-02-24T03:32:35.000Z,deepseek-ai,transformers
+657a503b57c26133131e7d31,dphn/dolphin-2.5-mixtral-8x7b,1235,False,3994,text-generation,transformers,2023-12-14T00:45:47.000Z,dphn/dolphin-2.5-mixtral-8x7b,7.0B,,,2024-05-21T16:20:06.000Z,dphn,transformers
+67feb40041c831de7c55448a,nvidia/parakeet-tdt-0.6b-v2,1227,False,1313494,automatic-speech-recognition,nemo,2025-04-15T19:31:12.000Z,nvidia/parakeet-tdt-0.6b-v2,600.0M,,,2025-06-26T17:22:06.000Z,nvidia,nemo
+66cee7d175a88154443a4056,Qwen/Qwen2-VL-7B-Instruct,1214,False,893560,image-text-to-text,transformers,2024-08-28T09:03:13.000Z,Qwen/Qwen2-VL-7B-Instruct,7.0B,,,2025-02-06T05:18:08.000Z,Qwen,transformers
+65cac0d27faf059c56a5821f,google/gemma-7b-it,1191,False,74193,text-generation,transformers,2024-02-13T01:07:30.000Z,google/gemma-7b-it,7.0B,,,2024-08-14T08:36:20.000Z,google,transformers
+64545242ecdd69b8134e2177,mosaicml/mpt-7b,1172,False,12464,text-generation,transformers,2023-05-05T00:48:02.000Z,mosaicml/mpt-7b,7.0B,,,2024-03-05T20:23:57.000Z,mosaicml,transformers
+669650bb11dbbf600cf4dcf0,google/gemma-2-2b-it,1142,False,313772,text-generation,transformers,2024-07-16T10:51:39.000Z,google/gemma-2-2b-it,2.0B,,,2024-08-27T19:41:44.000Z,google,transformers
+6538e659a608e1c3a212cb75,THUDM/chatglm3-6b,1137,False,521462,,transformers,2023-10-25T09:56:41.000Z,THUDM/chatglm3-6b,6.0B,,,2024-12-05T07:23:32.000Z,THUDM,transformers
+67fddfa9a7fe1f21ec1d3026,microsoft/bitnet-b1.58-2B-4T,1133,False,9677,text-generation,transformers,2025-04-15T04:25:13.000Z,microsoft/bitnet-b1.58-2B-4T,2.0B,,,2025-05-01T05:21:59.000Z,microsoft,transformers
+6523bd962d3ba46ccd378b5a,HuggingFaceH4/zephyr-7b-alpha,1112,False,9742,text-generation,transformers,2023-10-09T08:45:10.000Z,HuggingFaceH4/zephyr-7b-alpha,7.0B,,,2024-10-16T11:53:22.000Z,HuggingFaceH4,transformers
+6446b0089cb2a8f4a4ef5937,tiiuae/falcon-7b,1090,False,68918,text-generation,transformers,2023-04-24T16:36:24.000Z,tiiuae/falcon-7b,7.0B,,,2024-10-12T13:20:18.000Z,tiiuae,transformers
+678e4b16630463a29b67eb5e,unsloth/DeepSeek-R1-GGUF,1088,False,29710,text-generation,transformers,2025-01-20T13:09:42.000Z,unsloth/DeepSeek-R1-GGUF,3.0M,3.0 MB,3.0,2025-05-30T07:44:07.000Z,unsloth,transformers
+682bbe76b3e985a9dfaf3020,ByteDance-Seed/BAGEL-7B-MoT,1088,False,1791,any-to-any,bagel-mot,2025-05-19T23:27:50.000Z,ByteDance-Seed/BAGEL-7B-MoT,7.0B,,,2025-06-23T20:14:01.000Z,ByteDance-Seed,bagel-mot
+6795ffcd88cd7c0294702a72,Qwen/Qwen2.5-VL-7B-Instruct,1058,False,5259338,image-text-to-text,transformers,2025-01-26T09:26:37.000Z,Qwen/Qwen2.5-VL-7B-Instruct,7.0B,,,2025-04-06T16:23:01.000Z,Qwen,transformers
+65c48cae885203c00532a392,google/gemma-2b,1024,False,232052,text-generation,transformers,2024-02-08T08:11:26.000Z,google/gemma-2b,2.0B,,,2024-09-27T12:18:55.000Z,google,transformers
+652f0dc05d91b1c2957de551,adept/fuyu-8b,1007,False,32710,image-text-to-text,transformers,2023-10-17T22:42:08.000Z,adept/fuyu-8b,8.0B,,,2023-11-04T11:13:11.000Z,adept,transformers
+66eaedefece5ee215637cc82,meta-llama/Llama-3.2-1B-Instruct,1000,False,3295110,text-generation,transformers,2024-09-18T15:12:47.000Z,meta-llama/Llama-3.2-1B-Instruct,1.0B,,,2024-10-24T15:07:51.000Z,meta-llama,transformers

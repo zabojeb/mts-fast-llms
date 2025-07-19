@@ -1,9 +1,22 @@
+# Module done on 16.07 in 11:28
+
 from torch import dtype
 from torch import nn
 import torch
 
 
 def weights_to_dtype(model: nn.Module, dtype: dtype) -> nn.Module:
+    """
+    Applies dtype to model and returns it
+
+    Args:
+        model: model for convertation
+        dtype: torch dtype that will be applied
+
+    Returns:
+        model with certain dtype
+    """
+
     return model.to(dtype)
 
 

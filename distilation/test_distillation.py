@@ -27,6 +27,7 @@ warnings.filterwarnings('ignore')
 from distillation import KnowledgeDistillation, DistillationConfig, create_optimizer
 
 
+
 class SimpleTeacherModel(nn.Module):
     """Простая модель учителя для тестирования"""
     

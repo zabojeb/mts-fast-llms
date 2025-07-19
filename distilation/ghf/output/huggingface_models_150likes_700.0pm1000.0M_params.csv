@@ -1,0 +1,4 @@
+_id,id,likes,private,downloads,pipeline_tag,library_name,createdAt,modelId,parameters,model_size,model_size_mb,last_modified,author,library
+678dc6fff905d106be796d8a,deepseek-ai/DeepSeek-R1,12494,False,843787,text-generation,transformers,2025-01-20T03:46:07.000Z,deepseek-ai/DeepSeek-R1,3.0M,3.0 MB,3.0,2025-03-27T04:01:59.000Z,deepseek-ai,transformers
+676ca1388118866906abbd7c,hexgrad/Kokoro-82M,4676,False,1503133,text-to-speech,,2024-12-26T00:20:08.000Z,hexgrad/Kokoro-82M,82.0M,82.0 MB,82.0,2025-04-10T18:12:48.000Z,hexgrad,
+676c000762cee1f3abc3ed5f,deepseek-ai/DeepSeek-V3,3917,False,419211,text-generation,transformers,2024-12-25T12:52:23.000Z,deepseek-ai/DeepSeek-V3,3.0M,3.0 MB,3.0,2025-03-27T04:01:45.000Z,deepseek-ai,transformers
