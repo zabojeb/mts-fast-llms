@@ -1,6 +1,6 @@
-# Module done on 19.07 in 9:03
+# Module done on 17.07 in 14:33
 
-from typing import Optional, Dict, List, Type
+from typing import Optional, Dict, List
 from torch import dtype
 from torch import nn
 
@@ -10,19 +10,13 @@ QINT4 = 4
 
 class QuantizationConfigLayer:
     def __init__(
-            self,
-            qtype: int,
-            fraction: Optional[float] = 1,
-            names: Optional[List[str]] = None,
+        self,
+        qtype: int,
+        fraction: Optional[float] = 1,
+        names: Optional[List[str]] = None,
     ):
-        """
-        Configuration for quantizing a layer
+        # TODO: description
 
-        Args:
-            qtype: Quantization type (QINT8 or QINT4)
-            fraction: Fraction of parameters to quantize (0 to 1)
-            names: List of parameter names to quantize (if specified, fraction is ignored)
-        """
         if names is not None:
             fraction = None
 
@@ -38,19 +32,19 @@ class QuantizationConfigLayer:
 
 class QuantizationConfig:
     def __init__(
-            self,
-            compute_dtype: Optional[dtype] = None,
-            layers: Optional[Dict[Type[nn.Module], QuantizationConfigLayer]] = None,
+        self,
+        compute_dtype: Optional[dtype] = None,
+        layers: Dict[nn.Module, QuantizationConfigLayer] = None,
     ):
         """
-        Quantization configuration for a model
-
-        Args:
-            compute_dtype: Data type for computations
-            layers: Dictionary mapping layer types to their quantization configs
+        Kwargs:
+            compute_dtype: dtype for weight
         """
+
+        # TODO: description
+
         self.compute_dtype = compute_dtype
-        self.layers = layers or {}
+        self.layers = layers
 
     def __repr__(self):
         return "QuantizationConfig(compute_dtype={}, layers={})".format(
