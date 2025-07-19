@@ -1,22 +1,17 @@
 import torch
+from torch import nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
-import nltk
 import logging
-from typing import Dict
+from metrics import metrics_evaluate
+from quantization.config import QuantizationConfig, QuantizationConfigLayer, QINT4
+from quantization.quantize import quantize
 
-from .metrics.evaluate_metrics import metrics_evaluate
-
-# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Загрузка NLTK ресурсов
-nltk.download('wordnet', quiet=True)
-nltk.download('omw-1.4', quiet=True)
-
 def main():
-    # Загрузка модели и токенизатора
+    # Инициализация модели
     model_name = "Qwen/Qwen3-4B"
     tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
     model = AutoModelForCausalLM.from_pretrained(
@@ -25,36 +20,25 @@ def main():
         torch_dtype=torch.bfloat16
     )
 
-    # Переопределение generation_config для устранения предупреждений
-    model.generation_config.temperature = None
-    model.generation_config.top_p = None
-    model.generation_config.top_k = None
+    # Квантизация (исправленная версия)
+    qconfig = QuantizationConfig(
+        layers={
+            nn.Linear: QuantizationConfigLayer(
+                qtype=QINT4,
+                fraction=1.0,  # Явно указываем float
+            )
+        }
+    )
+    quantize(model, qconfig)
 
-    # Проверка поддержки perplexity
-    try:
-        dummy_input = tokenizer(["test"], return_tensors="pt").to("cuda")
-        with torch.amp.autocast('cuda'):
-            outputs = model(**dummy_input, labels=dummy_input["input_ids"])
-        if not hasattr(outputs, "loss") or outputs.loss is None:
-            logger.warning("Модель Qwen3-4B может не поддерживать вычисление perplexity")
-    except Exception as e:
-        logger.warning(f"Ошибка проверки perplexity: {str(e)}")
-
-    # Очистка памяти
-    torch.cuda.empty_cache()
-
-    # Загрузка датасета WMT14
-    dataset = load_dataset("wmt14", "ru-en", split="test[:100]")
-    dataset = dataset.map(
+    # Подготовка датасета
+    dataset = load_dataset("wmt14", "ru-en", split="test[:100]").map(
         lambda x: {
             "text": f"Переведи на английский: {x['translation']['ru']}",
-            "references": [x['translation']['en']]  # Оборачиваем в список для единообразия
+            "references": [x['translation']['en']]
         },
         remove_columns=["translation"]
     )
-
-    # Логирование примеров датасета
-    logger.info(f"Примеры датасета: {dataset[:5]}")
 
     # Оценка метрик
     results = metrics_evaluate(
@@ -68,18 +52,22 @@ def main():
             "text": "text",
             "reference": "references",
             "generate_kwargs": {
-                "max_new_tokens": 300,  # Use max_new_tokens instead of max_length
+                "max_new_tokens": 300,
                 "num_beams": 1,
                 "do_sample": False,
             }
-        },
-        log=True
+        }
     )
 
     # Вывод результатов
-    print("Результаты метрик:")
+    print("\nРезультаты оценки:")
     for metric, value in results.items():
-        print(f"{metric}: {value}")
+        if isinstance(value, dict):
+            print(f"{metric}:")
+            for k, v in value.items():
+                print(f"  {k}: {v:.4f}")
+        else:
+            print(f"{metric}: {value:.4f}")
 
 if __name__ == "__main__":
     main()
