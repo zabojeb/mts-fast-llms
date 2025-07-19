@@ -26,9 +26,9 @@ class TaskType(Enum):
 
 # Метрики для задач
 TASK_METRICS = {
+    TaskType.CLASSIFICATION: ["accuracy", "ece", "mce", "mmlu", "glue", "latency", "memory", "flops", "throughput", "energy"],
     TaskType.TRANSLATION: ["bleu", "rouge", "meteor", "bert_score", "perplexity", "latency", "memory", "flops", "throughput", "energy"],
     TaskType.GENERATION: ["bleu", "rouge", "meteor", "bert_score", "perplexity", "latency", "memory", "flops", "throughput", "energy"],
-    TaskType.CLASSIFICATION: ["accuracy", "ece", "mce", "mmlu", "glue", "latency", "memory", "flops", "throughput", "energy"],
     TaskType.VISION: ["iou", "map", "precision", "recall", "f1", "clip_score_vision", "latency", "memory", "flops", "throughput", "energy"]
 }
 
@@ -103,7 +103,7 @@ def train_func(
         "emissions": None,
         "predictions": [],
         "loss": None,
-        "total_examples": len(dataset)
+        "total_examples": len(dataset)  # Добавлено
     }
 
     batches = process_in_batches(dataset, batch_size)
@@ -137,45 +137,33 @@ def train_func(
             decoded_predictions = [processor.decode(pred, skip_special_tokens=True).strip() for pred in predictions]
             all_predictions.extend([p if p else "<пусто>" for p in decoded_predictions])
 
-            # Вычисление loss для perplexity (для TRANSLATION и GENERATION)
-            if task_type in [TaskType.TRANSLATION, TaskType.GENERATION] and batch_references:
-                # Токенизация референсов
-                ref_texts = [refs[0] for refs in batch_references if refs and refs[0].strip()]
-                if ref_texts:
-                    ref_inputs = processor(ref_texts, return_tensors="pt", padding=True, truncation=True,
-                                           max_length=512).to(device)
-                    ref_ids = ref_inputs["input_ids"]
-                    # Конкатенация промпта и референса
-                    max_length = max(inputs["input_ids"].size(1), ref_ids.size(1))
-                    input_ids = torch.nn.functional.pad(inputs["input_ids"],
-                                                        (0, max_length - inputs["input_ids"].size(1)),
-                                                        value=processor.pad_token_id)
-                    ref_ids = torch.nn.functional.pad(ref_ids, (0, max_length - ref_ids.size(1)),
-                                                      value=processor.pad_token_id)
-                    combined_ids = torch.cat([input_ids, ref_ids], dim=1)
-                    # Маскировка промпта в labels
-                    labels = torch.cat([
-                        torch.full_like(input_ids, -100),
-                        ref_ids
-                    ], dim=1)
-                    outputs = model(combined_ids, labels=labels)
+            # Вычисление loss для perplexity
+            if task_type == TaskType.TRANSLATION:
+                for prompt, refs in zip(batch_text, batch_references):
+                    if not refs or not prompt.strip():
+                        continue
+                    target = refs[0]
+                    prompt_ids = processor(prompt, return_tensors="pt").input_ids.to(device)
+                    target_ids = processor(target, return_tensors="pt").input_ids.to(device)
+                    input_ids = torch.cat([prompt_ids, target_ids], dim=1)
+                    labels = torch.cat([torch.full_like(prompt_ids, -100), target_ids], dim=1)
+                    outputs = model(input_ids, labels=labels)
                     if outputs.loss is not None:
-                        loss = outputs.loss.item()
-                        valid_tokens = (labels != -100).sum().item()
-                        total_loss += loss * valid_tokens
-                        total_tokens += valid_tokens
+                        loss = outputs.loss.item() * target_ids.size(1)
+                        total_loss += loss
+                        total_tokens += target_ids.size(1)
 
-        # Очистка памяти только если она заполнена
-        if device == "cuda" and torch.cuda.memory_allocated() / torch.cuda.get_device_properties(
-                device).total_memory > 0.9:
-            torch.cuda.empty_cache()
+        torch.cuda.empty_cache()
 
     metrics_data["timestamps"].append(time.time())
     metrics_data["emissions"] = carbon_tracker.stop()
     metrics_data["predictions"] = all_predictions
 
     # Средний loss для perplexity
-    metrics_data["loss"] = total_loss / total_tokens if total_tokens > 0 else float("inf")
+    if total_tokens > 0:
+        metrics_data["loss"] = total_loss / total_tokens
+    else:
+        metrics_data["loss"] = float("inf")
 
     metrics_to_check_list = TASK_METRICS[task_type]
     return all_predictions, metrics_data, metrics_to_check_list
@@ -195,7 +183,6 @@ def metrics_evaluate(
     if batch_size is None:
         batch_size = len(dataset)
 
-    total_start_time = time.time()
     predictions, metrics_data, metrics_to_check_list = train_func(
         model, processor, dataset, task_type, device, batch_size, field_mapping
     )
@@ -221,6 +208,4 @@ def metrics_evaluate(
                 float("inf")
             )
 
-    total_duration = time.time() - total_start_time
-    logger.info(f"Общее время вычисления метрик: {total_duration:.2f} секунд")
     return results
