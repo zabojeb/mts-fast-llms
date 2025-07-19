@@ -1,9 +1,12 @@
+# CIDEr.py
 from pycocoevalcap.cider.cider import Cider
 from typing import List
 import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)
+CIDER_CACHE = None
+
 
 def compute_cider(
         *,
@@ -11,7 +14,9 @@ def compute_cider(
         references: List[List[str]],
         **kwargs
 ) -> float:
-    """Вычисляет CIDEr score."""
+    """Вычисляет CIDEr score с кэшированием объекта Cider."""
+    global CIDER_CACHE
+
     try:
         if not predictions or not references or len(predictions) != len(references):
             logger.warning("CIDEr: Пустые или несоответствующие списки предсказаний и референсов")
@@ -23,10 +28,14 @@ def compute_cider(
             logger.warning("CIDEr: Некорректный формат предсказаний или референсов")
             return float("inf")
 
-        scorer = Cider()
+        # Инициализация кэша при первом вызове
+        if CIDER_CACHE is None:
+            logger.info("Инициализация CIDEr кэша...")
+            CIDER_CACHE = Cider()
+
         preds = {i: [p] for i, p in enumerate(predictions)}
         refs = {i: rs for i, rs in enumerate(references)}
-        score, _ = scorer.compute_score(refs, preds)
+        score, _ = CIDER_CACHE.compute_score(refs, preds)
         return score if np.isfinite(score) else float("inf")
     except Exception as e:
         logger.warning(f"Ошибка в compute_cider: {str(e)}")

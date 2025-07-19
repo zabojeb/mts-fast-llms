@@ -1,9 +1,12 @@
+# SPICE.py
 from pycocoevalcap.spice.spice import Spice
 from typing import List
 import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)
+SPICE_CACHE = None
+
 
 def compute_spice(
         *,
@@ -11,7 +14,9 @@ def compute_spice(
         references: List[List[str]],
         **kwargs
 ) -> float:
-    """Вычисляет SPICE score для семантического соответствия."""
+    """Вычисляет SPICE score с кэшированием объекта Spice."""
+    global SPICE_CACHE
+
     try:
         if not predictions or not references or len(predictions) != len(references):
             logger.warning("SPICE: Пустые или несоответствующие списки предсказаний и референсов")
@@ -23,10 +28,14 @@ def compute_spice(
             logger.warning("SPICE: Некорректный формат предсказаний или референсов")
             return float("inf")
 
-        spice = Spice()
+        # Инициализация кэша при первом вызове
+        if SPICE_CACHE is None:
+            logger.info("Инициализация SPICE кэша...")
+            SPICE_CACHE = Spice()
+
         preds = {i: [p] for i, p in enumerate(predictions)}
         refs = {i: rs for i, rs in enumerate(references)}
-        score, _ = spice.compute_score(refs, preds)
+        score, _ = SPICE_CACHE.compute_score(refs, preds)
         return score if np.isfinite(score) else float("inf")
     except Exception as e:
         logger.warning(f"Ошибка в compute_spice: {str(e)}")
