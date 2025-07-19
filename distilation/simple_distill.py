@@ -32,7 +32,7 @@ def distill_models(
     args = SimpleNamespace(
         teacher_model=teacher_model,
         student_model=student_model,
-        box=box_type,  # Исправлено: box_type -> box
+        box=box_type,
         teacher_model_path=teacher_model_path,
         student_model_path=student_model_path,
         dataset=dataset,
