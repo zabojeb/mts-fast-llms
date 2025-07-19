@@ -1,5 +1,9 @@
 from rouge_score import rouge_scorer
 from typing import List, Dict, Optional
+import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 def compute_rouge(
         *,
@@ -12,14 +16,41 @@ def compute_rouge(
     if not rouge_types:
         rouge_types = ["rouge1", "rouge2", "rougeL"]
 
-    scorer = rouge_scorer.RougeScorer(rouge_types, use_stemmer=True)
-    aggregated = {rouge_type: 0.0 for rouge_type in rouge_types}
+    try:
+        if not predictions or not references or len(predictions) != len(references):
+            logger.warning("ROUGE: Пустые или несоответствующие списки предсказаний и референсов")
+            return {rouge_type: float("inf") for rouge_type in rouge_types}
 
-    for pred, refs in zip(predictions, references):
-        # Берём первый референс из списка, если refs — список
-        ref = refs[0] if isinstance(refs, list) and refs else ""
-        scores = scorer.score(ref, pred if pred else "")
-        for rouge_type in rouge_types:
-            aggregated[rouge_type] += scores[rouge_type].fmeasure
+        if not all(isinstance(p, str) for p in predictions) or not all(
+                isinstance(r, list) and all(isinstance(ref, str) for ref in r) for r in references
+        ):
+            logger.warning("ROUGE: Некорректный формат предсказаний или референсов")
+            return {rouge_type: float("inf") for rouge_type in rouge_types}
 
-    return {k: v / len(predictions) for k, v in aggregated.items()} if predictions else {}
+        scorer = rouge_scorer.RougeScorer(rouge_types, use_stemmer=True)
+        aggregated = {rouge_type: [] for rouge_type in rouge_types}
+
+        for pred, refs in zip(predictions, references):
+            if not refs or not pred.strip():
+                continue
+            best_scores = {rouge_type: 0.0 for rouge_type in rouge_types}
+            for ref in refs:
+                if not ref.strip():
+                    continue
+                scores = scorer.score(ref, pred)
+                for rouge_type in rouge_types:
+                    best_scores[rouge_type] = max(best_scores[rouge_type], scores[rouge_type].fmeasure)
+            for rouge_type in rouge_types:
+                aggregated[rouge_type].append(best_scores[rouge_type])
+
+        if not any(aggregated[rouge_type] for rouge_type in rouge_types):
+            logger.warning("ROUGE: Не удалось вычислить метрики из-за пустых данных")
+            return {rouge_type: float("inf") for rouge_type in rouge_types}
+
+        return {
+            rouge_type: sum(scores) / len(scores) if scores else float("inf")
+            for rouge_type, scores in aggregated.items()
+        }
+    except Exception as e:
+        logger.warning(f"ROUGE: Ошибка при вычислении: {str(e)}")
+        return {rouge_type: float("inf") for rouge_type in rouge_types}

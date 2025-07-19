@@ -209,3 +209,10 @@ __marimo__/
 # VS Code
 
 .vscode
+
+node_modules
+.idea
+
+.DS_Store
+
+package-lock.json

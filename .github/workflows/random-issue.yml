@@ -1,0 +1,41 @@
+# .github/workflows/joke-commit.yml
+name: Empty Commit with Geek Joke
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write  # нужно, чтобы GITHUB_TOKEN имел право пушить
+
+jobs:
+  joke-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout main
+      uses: actions/checkout@v3
+      with:
+        ref: main
+        fetch-depth: 0      # чтобы история была полная и пушить было безопасно
+
+    - name: Fetch a geek joke
+      id: get_joke
+      run: |
+        # Сохраняем ответ API в многострочную output-переменную
+        echo "JOKE<<EOF" >> $GITHUB_OUTPUT
+        curl -s https://geek-jokes.sameerkumar.website/api?format=text >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Commit empty with joke message
+      run: |
+        git config user.name "ChuckNorris"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git commit --allow-empty -m ${{ steps.get_joke.outputs.JOKE }}
+
+    - name: Push to main
+      uses: ad-m/github-push-action@v0.6.0
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: main

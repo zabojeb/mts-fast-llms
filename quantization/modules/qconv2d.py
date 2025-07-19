@@ -1,24 +1,32 @@
-# Module done on 16.07 in 11:30
+# Module done on 17.07 in 14:33
 
+from typing import Optional, Tuple
 import torch.nn.functional as F
-from typing import Optional
 from torch import Tensor
 from torch import nn
 import torch
 
 
-class LinearAffine8bit(nn.Module):
+class Conv2dAffine8bit(nn.Module):
     def __init__(
         self,
         weight: nn.Parameter,
         bias: Optional[nn.Parameter] = None,
+        stride: Optional[Tuple[int, int] | int] = None,
+        padding: Optional[int | str] = None,
+        dilation: Optional[int] = None,
+        groups: Optional[int] = None,
     ):
 
         super().__init__()
 
         self.bias = bias
-        self.in_features = weight.shape[1]
-        self.out_features = weight.shape[0]
+        self.stride = stride
+        self.padding = padding
+        self.dilation = dilation
+        self.groups = groups
+        self.in_channels = weight.shape[1]
+        self.out_channels = weight.shape[0]
 
         with torch.no_grad():
             min_val, max_val = torch.aminmax(weight)
@@ -42,16 +50,24 @@ class LinearAffine8bit(nn.Module):
             self.weight = self.weight.to(torch.uint8)
 
     def forward(self, x: Tensor):
-        return F.linear(
-            x,
-            self.scale * (self.weight - self.zero_point),
-            self.bias,
+        return F.conv2d(
+            input=x,
+            weight=self.scale * (self.weight - self.zero_point),
+            bias=self.bias,
+            stride=self.stride,
+            padding=self.padding,
+            dilation=self.dilation,
+            groups=self.groups,
         )
 
     def __repr__(self):
-        return "LinearAffine8bit(in_features={}, out_features={}, scale={:.6f}, zero_point={})".format(
-            self.in_features,
-            self.out_features,
+        return "Conv2dAffine8bit(in_channels={}, out_channels={}, stride={}, padding={}, dilation={}, groups={}, scale={:.6f}, zero_point={})".format(
+            self.in_channels,
+            self.out_channels,
+            self.stride,
+            self.padding,
+            self.dilation,
+            self.groups,
             self.scale,
             self.zero_point,
         )
