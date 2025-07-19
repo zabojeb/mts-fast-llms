@@ -6,7 +6,7 @@ import nltk
 import logging
 from typing import Dict
 
-from .quantization.config import QuantizationConfig, QuantizationConfigLayer, QINT4
+from .quantization.config import QuantizationConfig, QuantizationConfigLayer, QINT8
 from .quantization.quantize import quantize
 from .metrics.evaluate_metrics import metrics_evaluate
 
@@ -22,7 +22,7 @@ qconfig = QuantizationConfig(
         # compute_dtype=torch.bfloat16,
         layers={
             nn.Linear: QuantizationConfigLayer(
-                qtype=QINT4,
+                qtype=QINT8,
                 fraction=1,
             )
         },
@@ -58,7 +58,7 @@ def main():
     torch.cuda.empty_cache()
 
     # Загрузка датасета WMT14
-    dataset = load_dataset("wmt14", "ru-en", split="test[:100]")
+    dataset = load_dataset("wmt14", "ru-en", split="test[:10]")
     dataset = dataset.map(
         lambda x: {
             "text": f"Переведи на английский: {x['translation']['ru']}",
