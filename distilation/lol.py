@@ -20,7 +20,7 @@ model.load_state_dict(state_dict)
 model.eval()
 model.to("cuda" if torch.cuda.is_available() else "cpu")
 
-# Если словарь расширен до 50257, обновите конфигурацию
+# Если словарь расширен до 50257, обновите конфигураци
 if TOKENIZER_NAME == "gpt2-xl":
     model.config.vocab_size = 50257
 

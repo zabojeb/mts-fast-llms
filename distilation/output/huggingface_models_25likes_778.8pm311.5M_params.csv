@@ -1,0 +1,6 @@
+_id,id,likes,private,downloads,pipeline_tag,library_name,createdAt,modelId,parameters,model_size,model_size_mb,last_modified,author,library
+67c9c10d54d811c24a021731,sesame/csm-1b,2138,False,30212,text-to-speech,,2025-03-06T15:36:45.000Z,sesame/csm-1b,1.0B,,,2025-05-27T12:21:26.000Z,sesame,
+66eaebb25fcdca258b9576cb,meta-llama/Llama-3.2-1B,1990,False,3528874,text-generation,transformers,2024-09-18T15:03:14.000Z,meta-llama/Llama-3.2-1B,1.0B,,,2024-10-24T15:08:03.000Z,meta-llama,transformers
+67feb40041c831de7c55448a,nvidia/parakeet-tdt-0.6b-v2,1231,False,1313494,automatic-speech-recognition,nemo,2025-04-15T19:31:12.000Z,nvidia/parakeet-tdt-0.6b-v2,600.0M,,,2025-06-26T17:22:06.000Z,nvidia,nemo
+66eaedefece5ee215637cc82,meta-llama/Llama-3.2-1B-Instruct,1001,False,3295110,text-generation,transformers,2024-09-18T15:12:47.000Z,meta-llama/Llama-3.2-1B-Instruct,1.0B,,,2024-10-24T15:07:51.000Z,meta-llama,transformers
+67d3b141d8b6e20c6d009c8b,manycore-research/SpatialLM-Llama-1B,969,False,1719,text-generation,transformers,2025-03-14T04:32:01.000Z,manycore-research/SpatialLM-Llama-1B,1.0B,,,2025-03-21T05:38:34.000Z,manycore-research,transformers

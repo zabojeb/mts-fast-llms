@@ -1,7 +1,17 @@
 import os
 import torch
-from test_distillation_wikitext import distill_gpt2_wikitext
+import copy
+from distillation_logic import distill_gpt2_wikitext
 
+# ============= УНИВЕРСАЛЬНЫЙ ФАЙЛ ЗАПУСКА ДИСТИЛЛЯЦИИ =============
+# Этот файл объединяет функциональность black-box и white-box дистилляции
+# и предоставляет единый интерфейс для запуска обоих типов дистилляции.
+#
+# Доступные функции:
+# - run_distillation() - запуск дистилляции с параметрами, указанными ниже
+# - run_blackbox_distillation() - запуск black-box дистилляции
+# - run_whitebox_distillation() - запуск white-box дистилляции
+#
 # ============= НАСТРОЙКИ ДИСТИЛЛЯЦИИ =============
 # Вы можете изменить эти параметры в соответствии с вашими потребностями
 
@@ -13,6 +23,11 @@ TEACHER_MODEL = 'gpt2-xl'
 # Модель студента (меньшая модель, которую мы обучаем)
 # Варианты: 'gpt2', 'gpt2-medium', 'Qwen/Qwen-1_8B-Chat' и т.д.
 STUDENT_MODEL = 'arnir0/Tiny-LLM'
+
+# Тип дистилляции: 'white' (с доступом к логитам) или 'black' (только предсказания)
+# white-box: Студент имеет доступ к внутренним логитам учителя (более эффективно, но требует совместимости моделей)
+# black-box: Студент имеет доступ только к выходным предсказаниям учителя (менее эффективно, но работает с любыми моделями)
+BOX_TYPE = 'white'
 
 # Путь к локальной модели учителя (если None, будет использована модель из Hugging Face)
 TEACHER_MODEL_PATH = None
@@ -107,6 +122,7 @@ DISTILLATION_CONFIG = {
         'student_model_name': STUDENT_MODEL,
         'teacher_model_path': TEACHER_MODEL_PATH,
         'student_model_path': STUDENT_MODEL_PATH,
+        'box_type': BOX_TYPE,
     },
     'dataset': {
         'dataset_name': DATASET,
@@ -179,6 +195,7 @@ def run_distillation(config=None):
         create_comparison_table = CREATE_COMPARISON_TABLE
         save_best_model = SAVE_BEST_MODEL
         folder_name = FOLDER_NAME
+        box_type = BOX_TYPE  # Добавляем тип дистилляции
     else:
         # Используем переданную конфигурацию
         teacher_model = config['models']['teacher_model_name']
@@ -198,6 +215,7 @@ def run_distillation(config=None):
         no_cuda = config['training']['no_cuda']
         output_dir = config['output']['output_dir']
         checkpoint_interval = config['output']['checkpoint_interval']
+        box_type = config['models'].get('box_type', 'white')  # Получаем тип дистилляции с значением по умолчанию 'white'
         run_tests = config['misc']['run_tests']
         skip_demo = config['misc']['skip_demo']
         install_deps = config['misc']['install_deps']
@@ -233,6 +251,7 @@ def run_distillation(config=None):
             self.create_comparison_table = create_comparison_table
             self.save_best_model = save_best_model
             self.folder_name = folder_name
+            self.box = box_type  # Добавляем параметр типа дистилляции
 
     args = Args()
 
@@ -248,5 +267,62 @@ def run_distillation(config=None):
     return trained_student, metrics
 
 
+def run_blackbox_distillation(config=None):
+    """Запускает процесс black-box дистилляции с указанными параметрами
+    
+    Args:
+        config: Словарь с конфигурацией дистилляции. Если None, используются глобальные параметры.
+        
+    Returns:
+        tuple: (обученная модель студента, метрики дистилляции)
+    """
+    # Создаем копию конфигурации, если она передана
+    if config is not None:
+        config = copy.deepcopy(config)
+        # Устанавливаем тип дистилляции 'black'
+        config['models']['box_type'] = 'black'
+    else:
+        # Используем глобальные параметры, но меняем тип дистилляции
+        global BOX_TYPE
+        original_box_type = BOX_TYPE
+        BOX_TYPE = 'black'
+        result = run_distillation()
+        BOX_TYPE = original_box_type  # Восстанавливаем оригинальное значение
+        return result
+    
+    # Запускаем дистилляцию с обновленной конфигурацией
+    print("\n=== ЗАПУСК BLACK-BOX ДИСТИЛЛЯЦИИ ===\n")
+    return run_distillation(config)
+
+
+def run_whitebox_distillation(config=None):
+    """Запускает процесс white-box дистилляции с указанными параметрами
+    
+    Args:
+        config: Словарь с конфигурацией дистилляции. Если None, используются глобальные параметры.
+        
+    Returns:
+        tuple: (обученная модель студента, метрики дистилляции)
+    """
+    # Создаем копию конфигурации, если она передана
+    if config is not None:
+        config = copy.deepcopy(config)
+        # Устанавливаем тип дистилляции 'white'
+        config['models']['box_type'] = 'white'
+    else:
+        # Используем глобальные параметры, но меняем тип дистилляции
+        global BOX_TYPE
+        original_box_type = BOX_TYPE
+        BOX_TYPE = 'white'
+        result = run_distillation()
+        BOX_TYPE = original_box_type  # Восстанавливаем оригинальное значение
+        return result
+    
+    # Запускаем дистилляцию с обновленной конфигурацией
+    print("\n=== ЗАПУСК WHITE-BOX ДИСТИЛЛЯЦИИ ===\n")
+    return run_distillation(config)
+
+
 if __name__ == "__main__":
+    # Запускаем дистилляцию с типом, указанным в глобальных настройках
     run_distillation()
