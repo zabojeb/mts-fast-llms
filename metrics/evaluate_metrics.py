@@ -27,8 +27,8 @@ class TaskType(Enum):
 # Метрики для задач
 TASK_METRICS = {
     TaskType.CLASSIFICATION: ["accuracy", "ece", "mce", "mmlu", "glue", "latency", "memory", "flops", "throughput", "energy"],
-    TaskType.TRANSLATION: ["bleu", "rouge", "meteor", "bert_score", "perplexity", "latency", "memory", "flops", "throughput", "energy"],
-    TaskType.GENERATION: ["bleu", "rouge", "meteor", "bert_score", "perplexity", "latency", "memory", "flops", "throughput", "energy"],
+    TaskType.TRANSLATION: ["bleu", "rouge", "meteor", "bert_score", "perplexity", "latency", "memory", "throughput", "energy"],
+    TaskType.GENERATION: ["bleu", "rouge", "meteor", "bert_score", "perplexity", "latency", "memory", "throughput", "energy"],
     TaskType.VISION: ["iou", "map", "precision", "recall", "f1", "clip_score_vision", "latency", "memory", "flops", "throughput", "energy"]
 }
 
@@ -70,7 +70,6 @@ def process_in_batches(dataset: HFDataset, batch_size: int) -> List[HFDataset]:
     num_samples = len(dataset)
     return [dataset.select(range(i, min(i + batch_size, num_samples))) for i in range(0, num_samples, batch_size)]
 
-
 def train_func(
         model: Any,
         processor: Any,
@@ -103,7 +102,7 @@ def train_func(
         "emissions": None,
         "predictions": [],
         "loss": None,
-        "total_examples": len(dataset)  # Добавлено
+        "total_examples": len(dataset)
     }
 
     batches = process_in_batches(dataset, batch_size)
@@ -116,7 +115,7 @@ def train_func(
 
     for batch in batches:
         batch_text = batch[text_field]
-        batch_references = batch[reference_field]
+        batch_references = [[ref] if isinstance(ref, str) else ref for ref in batch[reference_field]]
 
         # Токенизация промптов
         inputs = processor(batch_text, return_tensors="pt", padding=True, truncation=True, max_length=512).to(device)
@@ -132,26 +131,32 @@ def train_func(
         with torch.no_grad(), torch.amp.autocast('cuda'):
             # Генерация предсказаний
             generate_kwargs = field_mapping.get("generate_kwargs",
-                                                {"max_new_tokens": 150, "num_beams": 1, "do_sample": False})
+                                               {"max_new_tokens": 150, "num_beams": 1, "do_sample": False})
             predictions = model.generate(**inputs, **generate_kwargs)
             decoded_predictions = [processor.decode(pred, skip_special_tokens=True).strip() for pred in predictions]
             all_predictions.extend([p if p else "<пусто>" for p in decoded_predictions])
 
-            # Вычисление loss для perplexity
-            if task_type == TaskType.TRANSLATION:
+            # Вычисление loss для perplexity (для TRANSLATION и GENERATION)
+            if task_type in [TaskType.TRANSLATION, TaskType.GENERATION]:
                 for prompt, refs in zip(batch_text, batch_references):
-                    if not refs or not prompt.strip():
+                    if not refs or not prompt.strip() or not refs[0].strip():
+                        logger.warning(f"Пропущен пустой промпт или референс: prompt='{prompt}', refs={refs}")
                         continue
                     target = refs[0]
+                    # Токенизация промпта и эталонного текста
                     prompt_ids = processor(prompt, return_tensors="pt").input_ids.to(device)
                     target_ids = processor(target, return_tensors="pt").input_ids.to(device)
-                    input_ids = torch.cat([prompt_ids, target_ids], dim=1)
-                    labels = torch.cat([torch.full_like(prompt_ids, -100), target_ids], dim=1)
+                    # Объединяем входные данные и метки
+                    input_ids = target_ids  # Для perplexity используем только эталонный текст
+                    labels = target_ids.clone()
+                    # Вычисляем loss
                     outputs = model(input_ids, labels=labels)
-                    if outputs.loss is not None:
+                    if outputs.loss is not None and np.isfinite(outputs.loss.item()):
                         loss = outputs.loss.item() * target_ids.size(1)
                         total_loss += loss
                         total_tokens += target_ids.size(1)
+                    else:
+                        logger.warning(f"Loss не вычислен для target='{target}'")
 
         torch.cuda.empty_cache()
 
@@ -162,12 +167,13 @@ def train_func(
     # Средний loss для perplexity
     if total_tokens > 0:
         metrics_data["loss"] = total_loss / total_tokens
+        logger.info(f"Вычислен средний loss: {metrics_data['loss']:.4f}, total_tokens: {total_tokens}")
     else:
         metrics_data["loss"] = float("inf")
+        logger.warning("Не удалось вычислить loss: total_tokens=0")
 
     metrics_to_check_list = TASK_METRICS[task_type]
     return all_predictions, metrics_data, metrics_to_check_list
-
 
 def metrics_evaluate(
         model: Any,

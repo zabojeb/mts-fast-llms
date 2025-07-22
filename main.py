@@ -9,6 +9,7 @@ from typing import Dict
 from .quantization.config import QuantizationConfig, QuantizationConfigLayer, QINT8
 from .quantization.quantize import quantize
 from .metrics.evaluate_metrics import metrics_evaluate
+from .pool_2_pool import pool_2_pool
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -19,30 +20,18 @@ nltk.download('wordnet', quiet=True)
 nltk.download('omw-1.4', quiet=True)
 
 qconfig = QuantizationConfig(
-        # compute_dtype=torch.bfloat16,
-        layers={
-            nn.Linear: QuantizationConfigLayer(
-                qtype=QINT8,
-                fraction=1,
-            )
-        },
-    )
+    layers={
+        nn.Linear: QuantizationConfigLayer(
+            qtype=QINT8,
+            fraction=1,
+        )
+    },
+)
 
 def main():
-    # Загрузка модели и токенизатора
     model_name = "Qwen/Qwen3-4B"
     tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side='left')
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        device_map="cuda",
-        torch_dtype=torch.bfloat16
-    )
-    quantize(model, qconfig)
-
-    # Переопределение generation_config для устранения предупреждений
-    model.generation_config.temperature = None
-    model.generation_config.top_p = None
-    model.generation_config.top_k = None
+    model = torch.load("chmo.pth", weights_only=False)
 
     # Проверка поддержки perplexity
     try:
@@ -75,19 +64,39 @@ def main():
         model=model,
         processor=tokenizer,
         dataset=dataset,
-        f_type="translation",
+        f_type="generation",
         device="cuda",
         batch_size=4,
         field_mapping={
             "text": "text",
             "reference": "references",
             "generate_kwargs": {
-                "max_new_tokens": 300,  # Use max_new_tokens instead of max_length
+                "max_new_tokens": 300,
                 "num_beams": 1,
                 "do_sample": False,
             }
         },
         log=True
+    )
+
+    # Формирование конфига квантизации
+    configs = [
+        {
+            "method": {"__name__": "quantize"},
+            "params": {
+                "qtype": "QINT8",
+                "fraction": 1
+            }
+        }
+    ] if not model.training else []
+
+    # Добавление метрик в pool
+    pool_2_pool(
+        metrics_results=results,
+        configs=configs,
+        model_name=model_name,
+        task_type="generation",
+        original=not model.training  # True для исходной модели, False для квантованной
     )
 
     # Вывод результатов
