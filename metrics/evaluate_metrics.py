@@ -28,7 +28,7 @@ class TaskType(Enum):
 TASK_METRICS = {
     TaskType.CLASSIFICATION: ["accuracy", "ece", "mce", "mmlu", "glue", "latency", "memory", "flops", "throughput", "energy"],
     TaskType.TRANSLATION: ["bleu", "rouge", "meteor", "bert_score", "perplexity", "latency", "memory", "throughput", "energy"],
-    TaskType.GENERATION: ["bleu", "rouge", "meteor", "bert_score", "perplexity", "latency", "memory", "throughput", "energy"],
+    TaskType.GENERATION: ["bleu", "rouge", "meteor", "bert_score", "perplexity", "latency", "memory", "flops", "throughput", "energy"],
     TaskType.VISION: ["iou", "map", "precision", "recall", "f1", "clip_score_vision", "latency", "memory", "flops", "throughput", "energy"]
 }
 
@@ -101,7 +101,8 @@ def train_func(
         "cpu_memory": [],
         "emissions": None,
         "predictions": [],
-        "loss": None,
+        "log_probs": [],  # Для перплексии
+        "total_tokens": 0,
         "total_examples": len(dataset)
     }
 
@@ -109,8 +110,6 @@ def train_func(
     carbon_tracker = EmissionsTracker()
     carbon_tracker.start()
 
-    total_loss = 0.0
-    total_tokens = 0
     all_predictions = []
 
     for batch in batches:
@@ -136,27 +135,32 @@ def train_func(
             decoded_predictions = [processor.decode(pred, skip_special_tokens=True).strip() for pred in predictions]
             all_predictions.extend([p if p else "<пусто>" for p in decoded_predictions])
 
-            # Вычисление loss для perplexity (для TRANSLATION и GENERATION)
+            # Вычисление логарифмов вероятностей для перплексии
             if task_type in [TaskType.TRANSLATION, TaskType.GENERATION]:
-                for prompt, refs in zip(batch_text, batch_references):
-                    if not refs or not prompt.strip() or not refs[0].strip():
-                        logger.warning(f"Пропущен пустой промпт или референс: prompt='{prompt}', refs={refs}")
+                for refs in batch_references:
+                    if not refs or not refs[0].strip():
+                        logger.warning(f"Пропущен пустой референс: refs={refs}")
                         continue
                     target = refs[0]
-                    # Токенизация промпта и эталонного текста
-                    prompt_ids = processor(prompt, return_tensors="pt").input_ids.to(device)
-                    target_ids = processor(target, return_tensors="pt").input_ids.to(device)
-                    # Объединяем входные данные и метки
-                    input_ids = target_ids  # Для perplexity используем только эталонный текст
-                    labels = target_ids.clone()
-                    # Вычисляем loss
-                    outputs = model(input_ids, labels=labels)
-                    if outputs.loss is not None and np.isfinite(outputs.loss.item()):
-                        loss = outputs.loss.item() * target_ids.size(1)
-                        total_loss += loss
-                        total_tokens += target_ids.size(1)
-                    else:
-                        logger.warning(f"Loss не вычислен для target='{target}'")
+                    target_ids = processor(target, return_tensors="pt", padding=False, truncation=True, max_length=512).input_ids.to(device)
+                    if target_ids.size(1) < 2:  # Пропускаем слишком короткие тексты
+                        logger.warning(f"Слишком короткий референс: target='{target}', len={target_ids.size(1)}")
+                        continue
+                    # Получаем логиты
+                    outputs = model(target_ids)
+                    log_probs = torch.log_softmax(outputs.logits, dim=-1)
+                    # Сдвиг: предсказываем следующий токен
+                    input_ids = target_ids[:, :-1]
+                    target_ids_shifted = target_ids[:, 1:]
+                    # Извлекаем логарифмы вероятностей для целевых токенов
+                    selected_log_probs = torch.gather(
+                        log_probs[:, :-1, :],  # Исключаем последний логит
+                        dim=-1,
+                        index=target_ids_shifted.unsqueeze(-1)
+                    ).squeeze(-1)
+                    # Суммируем логарифмы вероятностей
+                    metrics_data["log_probs"].extend(selected_log_probs.sum(dim=-1).cpu().tolist())
+                    metrics_data["total_tokens"] += target_ids_shifted.size(1)
 
         torch.cuda.empty_cache()
 
@@ -164,13 +168,9 @@ def train_func(
     metrics_data["emissions"] = carbon_tracker.stop()
     metrics_data["predictions"] = all_predictions
 
-    # Средний loss для perplexity
-    if total_tokens > 0:
-        metrics_data["loss"] = total_loss / total_tokens
-        logger.info(f"Вычислен средний loss: {metrics_data['loss']:.4f}, total_tokens: {total_tokens}")
-    else:
-        metrics_data["loss"] = float("inf")
-        logger.warning("Не удалось вычислить loss: total_tokens=0")
+    if metrics_data["total_tokens"] == 0:
+        logger.warning("Не удалось вычислить log_probs: total_tokens=0")
+        metrics_data["log_probs"] = []
 
     metrics_to_check_list = TASK_METRICS[task_type]
     return all_predictions, metrics_data, metrics_to_check_list
